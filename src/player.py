@@ -2,31 +2,41 @@ import sys
 
 #OUT = open("out.txt", "w")
 #print(str(sys.argv), file=OUT)
+from util import readbool, readint, readstr
+
 
 class Player:
-	def __init__(self, id):
+	def __init__(self, player_id):
 		"""
-		:param id: identificador numérico del jugador
+		:param player_id: identificador numérico del jugador
 		"""
-		self.id = int(id)
+		self.id = int(player_id)
 		print("Inicializado jugador {0}".format(self.id))
+
 
 class Game:
 	def __init__(self, player_id, phase):
 		self.player_id = player_id
 		self.phase = phase
-		self.mechs = []
-		print("Id. de player: {0}, fase actual: {1}". format(self.player_id, self.phase))
+		print("* Id. de player: {0}, fase actual: {1}". format(self.player_id, self.phase))
+
+		# cargar el mapa
+		self.map = GameMap.parsefile(player_id=player_id)
+		print(self.map)
+
+		# Parsear fichero con información de mechs
+		self.mechs = Mech.parsefile(player_id)
+
 
 class Mech:
-	def __init__(self, player_id,
-			id, active, disconnected, swamped, ground, hextile, heading, torso_heading, temperature, on_fire,
+	def __init__(self,
+			mech_id, active, disconnected, swamped, ground, hextile, heading, torso_heading, temperature, on_fire,
 			has_club, club_type, shield, hull, narc, inarc,
 			movement_walk=None, movement_run=None, movement_jump=None, num_radiators_on=None, num_radiators_off=None,
 			mechwarrior_wounds=None, mechwarrior_conscious=None, slots=None, shooting_locations=None,
 			ejection_ready_ammo=None
 	):
-		self.id = id
+		self.id = mech_id
 		self.active = active
 		self.disconnected = disconnected
 		self.swamped = swamped
@@ -59,61 +69,56 @@ class Mech:
 		f = open("mechsJ{0}.sbt".format(player_id), "r")
 
 		# encabezado con magic number
-		assert(f.readline() == "mechsSBT\n")
+		assert(readstr(f) == "mechsSBT")
 
 		# Array con mechs que se devolverá
 		mechs=[]
 
-		num_mechs = int(f.readline())
-		print("Hay {0} mechs en el juego".format(num_mechs))
+		num_mechs = readint(f)
+		print("* Hay {0} mechs en el juego".format(num_mechs))
 
-		for i in range(0,num_mechs):
+		for mech_id in range(0,num_mechs):
 			mechdata = {}
 			# número de mech que se está analizando debe coincidir con el índice
-			assert(int(f.readline()) == i)
-			mechdata['active']          = f.readline() == "True\n"
-			mechdata['disconnected']    = f.readline() == "True\n"
-			mechdata['swamped']         = f.readline() == "True\n"
-			mechdata['ground']          = f.readline() == "True\n"
-			mechdata['hextile']         = f.readline().rstrip('\n')
-			mechdata['heading']         = int(f.readline())
-			mechdata['torso_heading']   = int(f.readline())
-			mechdata['temperature']     = int(f.readline())
-			mechdata['on_fire']         = f.readline() == "True\n"
-			mechdata['has_club']        = f.readline() == "True\n"
-			mechdata['club_type']       = int(f.readline())
-			mechdata['shield']          = [int(f.readline()) for _ in range(0,11)]
-			mechdata['hull']            = [int(f.readline()) for _ in range(0,8)]
+			assert(readint(f) == mech_id)
+			print("* Leyendo información del mech {0}".format(mech_id))
+			mechdata['active']          = readbool(f)
+			mechdata['disconnected']    = readbool(f)
+			mechdata['swamped']         = readbool(f)
+			mechdata['ground']          = readbool(f)
+			mechdata['hextile']         = readstr(f)
+			mechdata['heading']         = readint(f)
+			mechdata['torso_heading']   = readint(f)
+			mechdata['temperature']     = readint(f)
+			mechdata['on_fire']         = readbool(f)
+			mechdata['has_club']        = readbool(f)
+			mechdata['club_type']       = readint(f)
+			mechdata['shield']          = [readint(f) for _ in range(0,11)]
+			mechdata['hull']            = [readint(f) for _ in range(0,8)]
 
 			# Leer datos de movimiento, daños y otros (sólo si es el jugador actual)
-			if player_id == i:
-				mechdata['movement_walk']          = int(f.readline())
-				mechdata['movement_run']           = int(f.readline())
-				mechdata['movement_jump']          = int(f.readline())
-				mechdata['num_radiators_on']       = int(f.readline())
-				mechdata['num_radiators_off']      = int(f.readline())
-				mechdata['mechwarrior_wounds']     = int(f.readline())
-				mechdata['mechwarrior_conscious']  = f.readline() == "True\n"
-				mechdata['slots']                  = [int(f.readline()) for _ in range(0,78)]
-				mechdata['shooting_locations']     = [int(f.readline()) for _ in range(0,8)]
+			if player_id == mech_id:
+				print("* El mech {0} es el jugador actual".format(mech_id))
+				mechdata['movement_walk']          = readint(f)
+				mechdata['movement_run']           = readint(f)
+				mechdata['movement_jump']          = readint(f)
+				mechdata['num_radiators_on']       = readint(f)
+				mechdata['num_radiators_off']      = readint(f)
+				mechdata['mechwarrior_wounds']     = readint(f)
+				mechdata['mechwarrior_conscious']  = readbool(f)
+				mechdata['slots']                  = [readbool(f) for _ in range(0,78)]
+				mechdata['shooting_locations']     = [readbool(f) for _ in range(0,8)]
 
 				# Munición lista para ser expulsada
-				num_ejection_ready_ammo = int(f.readline())
-				ejection_ready_ammo = []
+				num_ejection_ready_ammo = readint(f)
+				mechdata['ejection_ready_ammo'] = [Ammo(location=readstr(f), slot=readint(f)) for _ in range(0, num_ejection_ready_ammo)]
 
-				for j in range(0, num_ejection_ready_ammo):
-					ejection_ready_ammo.append(Ammo(
-						location=f.readline().rstrip('\n'),
-						slot=int(f.readline())
-					))
-
-				mechdata['ejection_ready_ammo'] = ejection_ready_ammo
-
-			mechdata['narc']        = f.readline() == "True\n"
-			mechdata['inarc']       = f.readline() == "True\n"
+			# Datos de narcs e inarcs para todos los jugadores
+			mechdata['narc']        = [readbool(f) for _ in range (0, num_mechs)]
+			mechdata['inarc']       = [readbool(f) for _ in range (0, num_mechs)]
 
 			# Añadir mech al listado
-			mech = Mech(**mechdata)
+			mech = Mech(mech_id=mech_id, **mechdata)
 			mechs.append(mech)
 
 		# devolver listado de mechs
@@ -134,98 +139,115 @@ class Ammo:
 		else:
 			raise ValueError("La ubicación {1} es desconocida".format(location))
 
-class Map:
-	def __init__(self, player, game):
+class GameMap:
+	def __init__(self, mapdata):
 		"""
 		Inicializa el mapa de juego
-		:param player: instancia de Player
-		:param game: instancia de Game
+		:param mapdata: mapa de juego (diccionario a tres niveles)
 		"""
-		self.map = {}
-		self.width = None
-		self.height = None
-		self.parsefile(player_id=player)
+		self.map = mapdata
+		self.width = len(mapdata)
+		self.height = len(mapdata[list(mapdata.keys())[0]])
 
-	def parsefile(self, player_id):
+		# construir diccionario por "nombre" de cada Hextile
+		self.map_byname = {}
+		for _,col in self.map.items():
+			for _,hextile in col.items():
+				self.map_byname[hextile.name] = hextile
+
+
+	def __str__(self):
+		out = []
+		for q in self.map:
+			for r in self.map[q]:
+				out.append(str(self.map[q][r]))
+
+		return "\n".join(out)
+
+	@staticmethod
+	def parsefile(player_id):
 		# Fichero con mapa para jugador actual
 		f = open("mapaJ{0}.sbt".format(player_id), "r")
 
 		# encabezado con magic number
-		assert(f.readline() == "mapaSBT\n")
+		assert(readstr(f) == "mapaSBT")
 
 		# altura y anchura
-		self.height = int(f.readline())
-		self.width = int(f.readline())
-		print("Tamaño del mapa: {0} x {1} hexágonos (ancho x alto)".format(self.width, self.height))
+		height = readint(f)
+		width = readint(f)
+		print("* Tamaño del mapa: {0} x {1} hexágonos (ancho x alto)".format(width, height))
+		gamemap = {}
 
 		# inicializar hexágonos con datos del fichero
-		for col in range(0, self.width):
+		for col in range(0, width):
 			q = col+1
-			self.map[q] = {}
-			for row in range(0, self.height):
+			gamemap[q] = {}
+			for row in range(0, height):
 				r = row+1
-				hexagon = Hexagon(
+				hextile = Hextile(
 					row                = r,
 					col                = q,
-					level              = int(f.readline()),
-					terrain_type       = int(f.readline()),
-					object_in_terrain  = int(f.readline()),
-					building_fce       = int(f.readline()),
-					collapsed_building = f.readline() == "True\n",
-					on_fire            = f.readline() == "True\n",
-					smoke              = f.readline() == "True\n",
-					num_clubs          = f.readline() == "True\n",
+					level              = readint(f),
+					terrain_type       = readint(f),
+					object_in_terrain  = readint(f),
+					building_fce       = readint(f),
+					collapsed_building = readbool(f),
+					on_fire            = readbool(f),
+					smoke              = readbool(f),
+					num_clubs          = readint(f),
 					rivers             = {
-											1: f.readline() == "True\n",
-											2: f.readline() == "True\n",
-											3: f.readline() == "True\n",
-											4: f.readline() == "True\n",
-											5: f.readline() == "True\n",
-											6: f.readline() == "True\n",
+											1: readbool(f),
+											2: readbool(f),
+											3: readbool(f),
+											4: readbool(f),
+											5: readbool(f),
+											6: readbool(f),
 					                     },
 					roads              = {
-											1: f.readline() == "True\n",
-											2: f.readline() == "True\n",
-											3: f.readline() == "True\n",
-											4: f.readline() == "True\n",
-											5: f.readline() == "True\n",
-											6: f.readline() == "True\n",
+											1: readbool(f),
+											2: readbool(f),
+											3: readbool(f),
+											4: readbool(f),
+											5: readbool(f),
+											6: readbool(f),
 					                     },
 				)
 
-				self.map[hexagon.col][hexagon.row] = hexagon
+				gamemap[hextile.col][hextile.row] = hextile
 				#print(hexagon)
 
 		# calcular vecinos
-		for col in range(0, self.width):
-			for row in range(0, self.height):
+		for col in range(0, width):
+			for row in range(0, height):
 				q = col + 1
 				r = row + 1
 
 				# El cálculo es diferente dependiendo de si la columna es par o impar
 				if col % 2 == 1:
-					self.map[q][r].neighbours = {
-						1: self.map[q][r-1] if r>1 else None,
-						2: self.map[q+1][r] if q<self.width and r>1 else None,
-						3: self.map[q+1][r+1] if q<self.width and r<self.height else None,
-						4: self.map[q][r+1] if r<self.height else None,
-						5: self.map[q-1][r+1] if q>1 and r<self.height else None,
-						6: self.map[q-1][r] if q>1 and r>1 else None
+					gamemap[q][r].neighbours = {
+						1: gamemap[q  ][r-1] if r>1 else None,
+						2: gamemap[q+1][r  ] if q<width and r>1 else None,
+						3: gamemap[q+1][r+1] if q<width and r<height else None,
+						4: gamemap[q  ][r+1] if r<height else None,
+						5: gamemap[q-1][r+1] if q>1 and r<height else None,
+						6: gamemap[q-1][r  ] if q>1 and r>1 else None
 					}
 				else:
-					self.map[q][r].neighbours = {
-						1: self.map[q][r-1] if r>1 else None,
-						2: self.map[q+1][r-1] if q<self.width and r>1 else None,
-						3: self.map[q+1][r] if q<self.width and r<self.height else None,
-						4: self.map[q][r+1] if r<self.width else None,
-						5: self.map[q-1][r] if q>1 else None,
-						6: self.map[q-1][r-1] if q>1 and r>1 else None
+					gamemap[q][r].neighbours = {
+						1: gamemap[q  ][r-1] if r>1 else None,
+						2: gamemap[q+1][r-1] if q<width and r>1 else None,
+						3: gamemap[q+1][r  ] if q<width and r<height else None,
+						4: gamemap[q  ][r+1] if r<width else None,
+						5: gamemap[q-1][r  ] if q>1 else None,
+						6: gamemap[q-1][r-1] if q>1 and r>1 else None
 					}
 
-				print(self.map[q][r])
+		# Construir y devolver instancia del mapa
+		map = GameMap(mapdata=gamemap)
+		return map
 
 
-class Hexagon:
+class Hextile:
 	TERRAIN_TYPES = {
 		0: "OPEN",
 		1: "PAVEMENT",
@@ -245,7 +267,12 @@ class Hexagon:
 		255: "NONE"
 	}
 
-	def __init__(self, col, row, level, terrain_type, object_in_terrain, building_fce, collapsed_building, on_fire, smoke, num_clubs, rivers, roads, neigbours={}):
+	def __init__(self, col, row, level, terrain_type, object_in_terrain, building_fce, collapsed_building, on_fire,
+			smoke, num_clubs, rivers, roads, neigbours=None):
+
+		if not neigbours:
+			neigbours = {}
+
 		self.col = col
 		self.row = row
 		self.name = "{0:02d}{1:02d}".format(self.col, self.row)
@@ -291,12 +318,12 @@ def run():
 	if len(sys.argv) != 3:
 		raise ValueError("Número de argumentos inválido")
 
-	# inicializar jugador y fase
-	player = Player(id=sys.argv[1])
-	game = Game(player_id=sys.argv[1], phase=sys.argv[2])
+	# inicializar id de jugador y fase
+	player_id = int(sys.argv[1])
+	phase = sys.argv[2]
 
-	# cargar el mapa
-	gamemap = Map(player=player, game=game)
+	# construir datos del juego
+	game = Game(player_id=player_id, phase=phase)
 
 
 # inicializar la ejecución
