@@ -3,3 +3,4 @@
 out.txt
 venv/
 venv-win/
+__pycache__/
