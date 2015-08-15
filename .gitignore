@@ -1,0 +1,5 @@
+.idea
+*.sbt
+out.txt
+venv/
+venv-win/
