@@ -5,4 +5,4 @@
 call venv-win\Scripts\activate
 
 @REM invocar script Python
-python src\player.py %*
+python src\player.py %* > out.txt
