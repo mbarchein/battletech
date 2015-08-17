@@ -1,6 +1,7 @@
 decorator==4.0.2
 ipython==4.0.0
 ipython-genutils==0.1.0
+networkx==1.10
 path.py==7.6
 pexpect==3.3
 pickleshare==0.5
