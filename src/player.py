@@ -85,8 +85,6 @@ class Game:
 		for i in range(0, len(path)-1):
 			source = path[i]
 			target = path[i+1]
-			current_heading, current_hextile = source
-			next_heading,next_hextile = target
 
 			edge = self.map.get_edge_data(source,target)
 			cost = edge['weight']
