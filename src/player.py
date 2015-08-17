@@ -88,7 +88,7 @@ class Game:
 
 			edge = self.map.get_edge_data(source,target)
 			cost = edge['weight']
-			action = edge['type']
+			action = edge['action']
 
 			# Mover o rotar en la dirección que indica el arco en 1 unidad
 			out.append(action)

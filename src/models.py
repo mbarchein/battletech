@@ -140,10 +140,10 @@ class GameMap:
 			# Crear arcos "internos" entre las seis caras del hexágono, con un coste de movimiento de 1 asociado a la
 			# rotación del mech hacia una cara adyacente del hexágono
 			for i in range(1,6):
-				G.add_edge((i, hextile), (i+1, hextile), weight=self.rotation_cost((i, hextile), (i+1, hextile)), type="Derecha")
-				G.add_edge((i+1, hextile), (i, hextile), weight=self.rotation_cost((i, hextile), (i+1, hextile)), type="Izquierda")
-			G.add_edge((6, hextile), (1, hextile), weight=self.rotation_cost((6, hextile), (1, hextile)), type="Derecha")
-			G.add_edge((1, hextile), (6, hextile), weight=self.rotation_cost((1, hextile), (6, hextile)), type="Izquierda")
+				G.add_edge((i, hextile), (i+1, hextile), weight=self.rotation_cost((i, hextile), (i+1, hextile)), action="Derecha")
+				G.add_edge((i+1, hextile), (i, hextile), weight=self.rotation_cost((i, hextile), (i+1, hextile)), action="Izquierda")
+			G.add_edge((6, hextile), (1, hextile), weight=self.rotation_cost((6, hextile), (1, hextile)), action="Derecha")
+			G.add_edge((1, hextile), (6, hextile), weight=self.rotation_cost((1, hextile), (6, hextile)), action="Izquierda")
 
 			# Crear arcos entre hextiles vecinos, computando el coste del movimiento "Adelante" y "Atras", en caso de
 			# que este último esté permitido (se mantiene rotación en ambos movimientos). Se calcula para cada movimiento
@@ -152,7 +152,7 @@ class GameMap:
 				# Vecino en dirección "Adelante"
 				weight = self.movement_cost(hextile, neighbor, direction="forward")
 				if weight:
-					G.add_edge((rotation, hextile), (rotation, neighbor), weight=weight, type="Adelante")
+					G.add_edge((rotation, hextile), (rotation, neighbor), weight=weight, action="Adelante")
 
 				# rotación correspondiente a ir "hacia atrás" con respecto al source
 				backward_rot = ((rotation + 2) % 6) + 1
@@ -162,7 +162,7 @@ class GameMap:
 					backward_neighbor = hextile.neighbors[backward_rot]
 					weight = self.movement_cost(hextile, backward_neighbor, direction="backward")
 					if weight:
-						G.add_edge((rotation, hextile), (rotation, backward_neighbor), weight=weight, type="Atras")
+						G.add_edge((rotation, hextile), (rotation, backward_neighbor), weight=weight, action="Atras")
 
 		self.distance_graph = G
 		#for edge in G.edges(): print("({0},{1})".format(*edge))
@@ -368,7 +368,7 @@ class GameMap:
 			target = path[i+1]
 			edge = self.get_edge_data(path[i],path[i+1])
 			accum += edge['weight']
-			print("acción {5} | coste acumulado {0} | {1} a ({2},{3}), coste {4}".format(accum, edge['type'], target[0], target[1], edge['weight'], i+1))
+			print("acción {5} | coste acumulado {0} | {1} a ({2},{3}), coste {4}".format(accum, edge['action'], target[0], target[1], edge['weight'], i+1))
 
 		print("coste total del camino: {0}. Número de acciones necesarias: {1}".format(accum, len(path)-1))
 
