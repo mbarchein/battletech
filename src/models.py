@@ -139,18 +139,11 @@ class GameMap:
 		for name,hextile in self.map_byname.items():
 			# Crear arcos "internos" entre las seis caras del hexágono, con un coste de movimiento de 1 asociado a la
 			# rotación del mech hacia una cara adyacente del hexágono
-			G.add_edge((1, hextile), (2, hextile), weight=1, type="Derecha")
-			G.add_edge((2, hextile), (1, hextile), weight=1, type="Izquierda")
-			G.add_edge((2, hextile), (3, hextile), weight=1, type="Derecha")
-			G.add_edge((3, hextile), (2, hextile), weight=1, type="Izquierda")
-			G.add_edge((3, hextile), (4, hextile), weight=1, type="Derecha")
-			G.add_edge((4, hextile), (3, hextile), weight=1, type="Izquierda")
-			G.add_edge((4, hextile), (5, hextile), weight=1, type="Derecha")
-			G.add_edge((5, hextile), (4, hextile), weight=1, type="Izquierda")
-			G.add_edge((5, hextile), (6, hextile), weight=1, type="Derecha")
-			G.add_edge((6, hextile), (5, hextile), weight=1, type="Izquierda")
-			G.add_edge((6, hextile), (1, hextile), weight=1, type="Derecha")
-			G.add_edge((1, hextile), (6, hextile), weight=1, type="Izquierda")
+			for i in range(1,6):
+				G.add_edge((i, hextile), (i+1, hextile), weight=self.rotation_cost((i, hextile), (i+1, hextile)), type="Derecha")
+				G.add_edge((i+1, hextile), (i, hextile), weight=self.rotation_cost((i, hextile), (i+1, hextile)), type="Izquierda")
+			G.add_edge((6, hextile), (1, hextile), weight=self.rotation_cost((6, hextile), (1, hextile)), type="Derecha")
+			G.add_edge((1, hextile), (6, hextile), weight=self.rotation_cost((1, hextile), (6, hextile)), type="Izquierda")
 
 			# Crear arcos entre hextiles vecinos, computando el coste del movimiento "Adelante" y "Atras", en caso de
 			# que este último esté permitido (se mantiene rotación en ambos movimientos). Se calcula para cada movimiento
@@ -273,72 +266,18 @@ class GameMap:
 		p = networkx.astar_path(self.distance_graph, source, target, heuristic=heuristic)
 		return p
 
-	@classmethod
-	def simple_movement_cost(cls, source, target):
+	def get_simple_movement_cost(self, source, target):
 		"""
-		Calcula el coste de un movimiento simple (rotación, paso de 1 casilla) siempre que este sea posible
+		Calcula el coste de un movimiento simple (rotación o traslación de 1 casilla) siempre que este sea posible
 		:param source: tuple (rotación, hextile) origen
 		:param target: tupla (rotación, hextile) destino
 		:return: (int) coste del movimiento
 		"""
-
-		source_rot, source_hextile = source
-		target_rot, target_hextile = target
-
-		if source_hextile == target_hextile:
-			# Es una rotación
-			cost = cls.rotation_cost(source_rot,target_rot)
+		edge = self.get_edge_data(source, target)
+		if edge:
+			return edge['weight']
 		else:
-			# Es una traslación.
-
-			# Comprobar que el heading coincide
-			if source_rot != target_rot:
-				raise ValueError("No se puede hacer el movimiento ({0},{1}) -> ({2},{3}). La rotación no coincide".format(source_rot, source_hextile.name, target_rot, target_hextile.name))
-
-			# Comprobar que son celdas adyacentes
-			elif target_hextile not in source_hextile.neighbors.values():
-				raise ValueError("No se puede hacer el movimiento ({0},{1}) -> ({2},{3}). No son adyacentes".format(source_rot, source_hextile.name, target_rot, target_hextile.name))
-
-			# Determinar si se trata de un movimiento hacia adelante o hacia atrás
-			direction = cls.movement_direction(source, target)
-
-			# Calcular coste y comprobar si es correcto (alzanzable)
-			cost = cls.movement_cost(source_hextile, target_hextile, direction)
-
-			if not cost:
-				raise ValueError("No se puede hacer el movimiento ({0},{1}) -> ({2},{3}). Destino inalcanzable".format(source_rot, source_hextile.name, target_rot, target_hextile.name))
-
-
-		return cost
-
-
-	@classmethod
-	def movement_direction(cls, source, target):
-		"""
-		Determina la dirección del movimiento entre dos posiciones adyacentes
-		:param source: tuple (rotación, hextile) origen
-		:param target: tuple (rotación, hextile) destino
-		:return: (str) dirección de destino "forward" o "backward"
-		:raise ValueError:
-		"""
-		source_rot, source_hextile = source
-		target_rot, target_hextile = target
-
-		#for r,n in source_hextile.neighbors.items():
-		#	print(r, n.name)
-
-		# rotación correspondiente a ir "hacia atrás" con respecto al source
-		backward_rot = ((source_rot + 2) % 6) + 1
-
-		if source_hextile.neighbors[source_rot] == target_hextile:
-			direction = "forward"
-		elif source_hextile.neighbors[backward_rot] == target_hextile:
-			direction = "backward"
-		else:
-			raise ValueError("No se puede hacer el movimiento ({0},{1}) -> ({2},{3}). El destino no está hacia ni adelante ni hacia atrás respecto al origen".format(source_rot, source_hextile.name, target_rot, target_hextile.name))
-
-		return direction
-
+			raise ValueError("El arco ({0},{1}),({2},{3}) no existe en el grafo de movimientos permitidos".format(source[0], source[1].name, target[0], target[1].name))
 
 	@classmethod
 	def movement_cost(cls, a, b, direction="forward"):
@@ -347,7 +286,7 @@ class GameMap:
 		:param a: Hextile de origen
 		:param b: Hextile de destino
 		:param direction: (str) dirección del movimiento. Puede ser "forward" o "backward"
-		:return: int coste del movimiento o None si no se posible
+		:return: int coste del movimiento o None si el movimiento no se posible
 		"""
 		cost = 0
 		impossible = False
@@ -399,33 +338,22 @@ class GameMap:
 			return cost
 
 	@classmethod
-	def rotation_cost(cls, source, dest):
+	def rotation_cost(cls, source, target):
 		"""
 		Calcula el coste para realizar un giro
-		:param source: (int) rotación inicial
-		:param dest: (int) rotación final
+		:param source: (rot, hextile) posición inicial
+		:param target: (rot, hextile) posición final
 		:return: (int) coste para efectuar el giro
 		"""
-		diff = (dest - source) % 6
+
+		if source[1] != target[1]:
+			raise ValueError("La rotación debe ser dentro del mismo hextile ({0},{1}), ({2},{3})".format(source[0], source[1].name, target[0], target[1].name))
+
+		diff = (target[0] - source[0]) % 6
 		if diff >= 4:
 			return 6-diff
 		else:
 			return diff
-
-	@classmethod
-	def rotation_direction(cls, source, dest):
-		"""
-		Calcula la dirección de rotación necesaria para hacer el movimiento
-		:param source: (int) rotación inicial
-		:param dest: (int) rotación final
-		:return: (str) dirección de rotación "left" o "right"
-		"""
-		diff = (dest - source) % 6
-		if diff >= 4:
-			return "left"
-		else:
-			return "right"
-
 
 	def print_path(self, path):
 		"""
@@ -433,16 +361,16 @@ class GameMap:
 		:param path: lista de vértices del grafo de movimiento
 		:return:
 		"""
-
+		print("posición de inicio| ({0},{1})".format(path[0][0], path[0][1].name))
 		accum = 0
 
 		for i in range(0, len(path)-1):
-			source_rot, source_hextile = path[i]
-			target_rot, target_hextile = path[i+1]
+			target = path[i+1]
 			edge = self.get_edge_data(path[i],path[i+1])
 			accum += edge['weight']
+			print("acción {5} | coste acumulado {0} | {1} a ({2},{3}), coste {4}".format(accum, edge['type'], target[0], target[1].name, edge['weight'], i+1))
 
-			print("coste acumulado {0} | {1} a ({2},{3}), coste {4}".format(accum, edge['type'], target_rot, target_hextile.name, edge['weight']))
+		print("coste total del camino: {0}. Número de acciones necesarias: {1}".format(accum, len(path)-1))
 
 	def get_edge_data(self,a,b):
 		"""

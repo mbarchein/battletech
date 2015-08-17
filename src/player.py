@@ -58,7 +58,7 @@ class Game:
 		accum = 0
 		i = 0
 		while i < len(astar_path)-1:
-			cost = GameMap.simple_movement_cost(astar_path[i], astar_path[i+1])
+			cost = self.map.get_simple_movement_cost(astar_path[i], astar_path[i+1])
 			accum += cost
 			if accum > max_walk:
 				break
