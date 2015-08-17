@@ -277,7 +277,7 @@ class GameMap:
 		if edge:
 			return edge['weight']
 		else:
-			raise ValueError("El arco ({0},{1}),({2},{3}) no existe en el grafo de movimientos permitidos".format(source[0], source[1].name, target[0], target[1].name))
+			raise ValueError("El arco ({0},{1}),({2},{3}) no existe en el grafo de movimientos permitidos".format(source[0], source[1], target[0], target[1]))
 
 	@classmethod
 	def movement_cost(cls, a, b, direction="forward"):
@@ -347,7 +347,7 @@ class GameMap:
 		"""
 
 		if source[1] != target[1]:
-			raise ValueError("La rotación debe ser dentro del mismo hextile ({0},{1}), ({2},{3})".format(source[0], source[1].name, target[0], target[1].name))
+			raise ValueError("La rotación debe ser dentro del mismo hextile ({0},{1}), ({2},{3})".format(source[0], source[1], target[0], target[1]))
 
 		diff = (target[0] - source[0]) % 6
 		if diff >= 4:
@@ -361,14 +361,14 @@ class GameMap:
 		:param path: lista de vértices del grafo de movimiento
 		:return:
 		"""
-		print("posición de inicio| ({0},{1})".format(path[0][0], path[0][1].name))
+		print("posición de inicio| ({0},{1})".format(*path[0]))
 		accum = 0
 
 		for i in range(0, len(path)-1):
 			target = path[i+1]
 			edge = self.get_edge_data(path[i],path[i+1])
 			accum += edge['weight']
-			print("acción {5} | coste acumulado {0} | {1} a ({2},{3}), coste {4}".format(accum, edge['type'], target[0], target[1].name, edge['weight'], i+1))
+			print("acción {5} | coste acumulado {0} | {1} a ({2},{3}), coste {4}".format(accum, edge['type'], target[0], target[1], edge['weight'], i+1))
 
 		print("coste total del camino: {0}. Número de acciones necesarias: {1}".format(accum, len(path)-1))
 
@@ -424,6 +424,9 @@ class Hextile:
 		self.neighbors = neigbors
 
 	def __str__(self):
+		return "<{0}>".format(self.name)
+
+	def __unicode__(self):
 		out = self.name + " | "
 		has_neighbors = False
 		for k in self.neighbors:

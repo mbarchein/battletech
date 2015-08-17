@@ -38,8 +38,8 @@ class Game:
 		Ejecuta la fase de movimiento
 		:return:
 		"""
-		print("* Mech jugador en hextile {0}, rotación {1}".format(self.player_mech.hextile.name, self.player_mech.heading))
-		print("* Mech enemigo en hextile {0}, rotación {1}".format(self.enemy_mech.hextile.name, self.enemy_mech.heading))
+		print("* Mech jugador en hextile {0}, rotación {1}".format(self.player_mech.hextile, self.player_mech.heading))
+		print("* Mech enemigo en hextile {0}, rotación {1}".format(self.enemy_mech.hextile, self.enemy_mech.heading))
 		source = (self.player_mech.heading, self.player_mech.hextile)
 		target = (1, self.enemy_mech.hextile)
 
@@ -97,7 +97,7 @@ class Game:
 			# Mover o rotar en la dirección que indica el arco en 1 unidad
 			out.append(action)
 			out.append("1")
-			print ("movimiento: {5} ({0},{1}) a ({2},{3}). Coste: {4}".format(source[0], source[1].name, target[0], target[1].name, cost, action))
+			print ("movimiento: {5} ({0},{1}) a ({2},{3}). Coste: {4}".format(source[0], source[1], target[0], target[1], cost, action))
 
 		print("* Generados {0} comandos de movimiento para jugador {1}".format(len(path)-1, self.player_id))
 		return out
