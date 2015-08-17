@@ -1,8 +1,6 @@
 import sys
 
-from algorithms import a_star_search, reconstruct_path
 from models import Mech, GameMap
-
 
 class Game:
 	def __init__(self, player_id, phase):
