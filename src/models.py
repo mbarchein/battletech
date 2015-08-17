@@ -171,7 +171,7 @@ class GameMap:
 		out = []
 		for q in self.map:
 			for r in self.map[q]:
-				out.append(str(self.map[q][r]))
+				out.append(self.map[q][r].get_extended_info())
 
 		return "\n".join(out)
 
@@ -225,7 +225,6 @@ class GameMap:
 				)
 
 				gamemap[hextile.col][hextile.row] = hextile
-				#print(hexagon)
 
 		# calcular vecinos
 		for col in range(0, width):
@@ -426,7 +425,7 @@ class Hextile:
 	def __str__(self):
 		return "<{0}>".format(self.name)
 
-	def __unicode__(self):
+	def get_extended_info(self):
 		out = self.name + " | "
 		has_neighbors = False
 		for k in self.neighbors:
