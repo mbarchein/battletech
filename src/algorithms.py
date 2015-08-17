@@ -14,7 +14,7 @@ def a_star_search(graph, start, goal, heuristic, cost):
 		if current == goal:
 			break
 
-		for hexrot,nextnode in current.neighbours.items():
+		for hexrot,nextnode in current.neighbors.items():
 			new_cost = cost_so_far[current] + cost(current, nextnode)
 			if nextnode not in cost_so_far or new_cost < cost_so_far[nextnode]:
 				cost_so_far[nextnode] = new_cost

@@ -1,6 +1,5 @@
+import networkx
 from util import readstr, readint, readbool
-
-__author__ = 'mario'
 
 
 class Mech:
@@ -122,6 +121,8 @@ class GameMap:
 		:param mapdata: mapa de juego (diccionario a tres niveles)
 		"""
 		self.map = mapdata
+		self.map_byname = {}
+		self.distance_graph = None
 		self.width = len(mapdata)
 		self.height = len(mapdata[list(mapdata.keys())[0]])
 
@@ -132,6 +133,46 @@ class GameMap:
 			for _,hextile in col.items():
 				self.map_byname[hextile.name] = hextile
 
+		# Crear grafo dirigido de movimientos permitidos con coste de acción teniendo en cuenta rotaciones
+		G = networkx.DiGraph()
+
+		for name,hextile in self.map_byname.items():
+			# Crear arcos "internos" entre las seis caras del hexágono, con un coste de movimiento de 1 asociado a la
+			# rotación del mech hacia una cara adyacente del hexágono
+			G.add_edge((1, hextile), (2, hextile), weight=1, type="Derecha")
+			G.add_edge((2, hextile), (1, hextile), weight=1, type="Izquierda")
+			G.add_edge((2, hextile), (3, hextile), weight=1, type="Derecha")
+			G.add_edge((3, hextile), (2, hextile), weight=1, type="Izquierda")
+			G.add_edge((3, hextile), (4, hextile), weight=1, type="Derecha")
+			G.add_edge((4, hextile), (3, hextile), weight=1, type="Izquierda")
+			G.add_edge((4, hextile), (5, hextile), weight=1, type="Derecha")
+			G.add_edge((5, hextile), (4, hextile), weight=1, type="Izquierda")
+			G.add_edge((5, hextile), (6, hextile), weight=1, type="Derecha")
+			G.add_edge((6, hextile), (5, hextile), weight=1, type="Izquierda")
+			G.add_edge((6, hextile), (1, hextile), weight=1, type="Derecha")
+			G.add_edge((1, hextile), (6, hextile), weight=1, type="Izquierda")
+
+			# Crear arcos entre hextiles vecinos, computando el coste del movimiento "Adelante" y "Atras", en caso de
+			# que este último esté permitido (se mantiene rotación en ambos movimientos). Se calcula para cada movimiento
+			# el coste, teniendo en cuenta tipos de terreno, elevación, etc.
+			for rotation, neighbor in hextile.neighbors.items():
+				# Vecino en dirección "Adelante"
+				weight = self.movement_cost(hextile, neighbor, direction="forward")
+				if weight:
+					G.add_edge((rotation, hextile), (rotation, neighbor), weight=weight, type="Adelante")
+
+				# rotación correspondiente a ir "hacia atrás" con respecto al source
+				backward_rot = ((rotation + 2) % 6) + 1
+
+				# Vecino en dirección "Atras"
+				if backward_rot in hextile.neighbors:
+					backward_neighbor = hextile.neighbors[backward_rot]
+					weight = self.movement_cost(hextile, backward_neighbor, direction="backward")
+					if weight:
+						G.add_edge((rotation, hextile), (rotation, backward_neighbor), weight=weight, type="Atras")
+
+		self.distance_graph = G
+		#for edge in G.edges(): print("({0},{1})".format(*edge))
 
 	def __str__(self):
 		out = []
@@ -141,8 +182,8 @@ class GameMap:
 
 		return "\n".join(out)
 
-	@staticmethod
-	def parsefile(player_id):
+	@classmethod
+	def parsefile(cls, player_id):
 		# Fichero con mapa para jugador actual
 		f = open("mapaJ{0}.sbt".format(player_id), "r")
 
@@ -201,7 +242,7 @@ class GameMap:
 
 				# El cálculo es diferente dependiendo de si la columna es par o impar
 				if col % 2 == 1:
-					gamemap[q][r].neighbours = {
+					gamemap[q][r].neighbors = {
 						1: gamemap[q  ][r-1] if r>1 else None,
 						2: gamemap[q+1][r  ] if q<width and r>1 else None,
 						3: gamemap[q+1][r+1] if q<width and r<height else None,
@@ -210,23 +251,207 @@ class GameMap:
 						6: gamemap[q-1][r  ] if q>1 and r>1 else None
 					}
 				else:
-					gamemap[q][r].neighbours = {
+					gamemap[q][r].neighbors = {
 						1: gamemap[q  ][r-1] if r>1 else None,
 						2: gamemap[q+1][r-1] if q<width and r>1 else None,
-						3: gamemap[q+1][r  ] if q<width and r<height else None,
-						4: gamemap[q  ][r+1] if r<width else None,
+						3: gamemap[q+1][r  ] if q<width else None,
+						4: gamemap[q  ][r+1] if r<height else None,
 						5: gamemap[q-1][r  ] if q>1 else None,
 						6: gamemap[q-1][r-1] if q>1 and r>1 else None
 					}
 
 				# Eliminar vecinos "nulos"
-				keys = list(gamemap[q][r].neighbours.keys())
+				keys = list(gamemap[q][r].neighbors.keys())
 				for key in keys:
-					if gamemap[q][r].neighbours[key] is None:
-						gamemap[q][r].neighbours.pop(key, None)
+					if gamemap[q][r].neighbors[key] is None:
+						gamemap[q][r].neighbors.pop(key, None)
 
 		# Construir y devolver instancia del mapa
 		return GameMap(mapdata=gamemap)
+
+	def astar_path(self, source, target, heuristic=None):
+		p = networkx.astar_path(self.distance_graph, source, target, heuristic=heuristic)
+		return p
+
+	@classmethod
+	def simple_movement_cost(cls, source, target):
+		"""
+		Calcula el coste de un movimiento simple (rotación, paso de 1 casilla) siempre que este sea posible
+		:param source: tuple (rotación, hextile) origen
+		:param target: tupla (rotación, hextile) destino
+		:return: (int) coste del movimiento
+		"""
+
+		source_rot, source_hextile = source
+		target_rot, target_hextile = target
+
+		if source_hextile == target_hextile:
+			# Es una rotación
+			cost = cls.rotation_cost(source_rot,target_rot)
+		else:
+			# Es una traslación.
+
+			# Comprobar que el heading coincide
+			if source_rot != target_rot:
+				raise ValueError("No se puede hacer el movimiento ({0},{1}) -> ({2},{3}). La rotación no coincide".format(source_rot, source_hextile.name, target_rot, target_hextile.name))
+
+			# Comprobar que son celdas adyacentes
+			elif target_hextile not in source_hextile.neighbors.values():
+				raise ValueError("No se puede hacer el movimiento ({0},{1}) -> ({2},{3}). No son adyacentes".format(source_rot, source_hextile.name, target_rot, target_hextile.name))
+
+			# Determinar si se trata de un movimiento hacia adelante o hacia atrás
+			direction = cls.movement_direction(source, target)
+
+			# Calcular coste y comprobar si es correcto (alzanzable)
+			cost = cls.movement_cost(source_hextile, target_hextile, direction)
+
+			if not cost:
+				raise ValueError("No se puede hacer el movimiento ({0},{1}) -> ({2},{3}). Destino inalcanzable".format(source_rot, source_hextile.name, target_rot, target_hextile.name))
+
+
+		return cost
+
+
+	@classmethod
+	def movement_direction(cls, source, target):
+		"""
+		Determina la dirección del movimiento entre dos posiciones adyacentes
+		:param source: tuple (rotación, hextile) origen
+		:param target: tuple (rotación, hextile) destino
+		:return: (str) dirección de destino "forward" o "backward"
+		:raise ValueError:
+		"""
+		source_rot, source_hextile = source
+		target_rot, target_hextile = target
+
+		#for r,n in source_hextile.neighbors.items():
+		#	print(r, n.name)
+
+		# rotación correspondiente a ir "hacia atrás" con respecto al source
+		backward_rot = ((source_rot + 2) % 6) + 1
+
+		if source_hextile.neighbors[source_rot] == target_hextile:
+			direction = "forward"
+		elif source_hextile.neighbors[backward_rot] == target_hextile:
+			direction = "backward"
+		else:
+			raise ValueError("No se puede hacer el movimiento ({0},{1}) -> ({2},{3}). El destino no está hacia ni adelante ni hacia atrás respecto al origen".format(source_rot, source_hextile.name, target_rot, target_hextile.name))
+
+		return direction
+
+
+	@classmethod
+	def movement_cost(cls, a, b, direction="forward"):
+		"""
+		Computa el coste de movimiento desde el Hextile a al b. Ambos hextiles deben ser adyacentes.
+		:param a: Hextile de origen
+		:param b: Hextile de destino
+		:param direction: (str) dirección del movimiento. Puede ser "forward" o "backward"
+		:return: int coste del movimiento o None si no se posible
+		"""
+		cost = 0
+		impossible = False
+
+		# El coste de no moverse es 0
+		if a == b:
+			return 0
+
+		################################
+		## Tipo de terreno
+		################################
+		# Despejado o pavimentado
+		if a.terrain_type in (0,1):
+			cost += 1
+
+		# Agua
+		if a.terrain_type == 2:
+			if a.level == 1:
+				cost += 2
+			if a.level >= 2:
+				cost += 4
+
+		# Pantanoso
+		if a.terrain_type == 4:
+			cost += 2
+
+		################################
+		## Cambio de elevación
+		################################
+		level_change = abs(b.level - a.level)
+		if level_change == 0:
+			pass
+		elif level_change == 1:
+			if direction != "forward":
+				impossible = True
+			else:
+				cost += 1
+		elif level_change == 2:
+			if direction != "forward":
+				impossible = True
+			else:
+				cost += 2
+		else:
+			impossible = True
+
+		if impossible:
+			return None
+		else:
+			return cost
+
+	@classmethod
+	def rotation_cost(cls, source, dest):
+		"""
+		Calcula el coste para realizar un giro
+		:param source: (int) rotación inicial
+		:param dest: (int) rotación final
+		:return: (int) coste para efectuar el giro
+		"""
+		diff = (dest - source) % 6
+		if diff >= 4:
+			return 6-diff
+		else:
+			return diff
+
+	@classmethod
+	def rotation_direction(cls, source, dest):
+		"""
+		Calcula la dirección de rotación necesaria para hacer el movimiento
+		:param source: (int) rotación inicial
+		:param dest: (int) rotación final
+		:return: (str) dirección de rotación "left" o "right"
+		"""
+		diff = (dest - source) % 6
+		if diff >= 4:
+			return "left"
+		else:
+			return "right"
+
+
+	def print_path(self, path):
+		"""
+		Imprime por la salida la información de una ruta
+		:param path: lista de vértices del grafo de movimiento
+		:return:
+		"""
+
+		accum = 0
+
+		for i in range(0, len(path)-1):
+			source_rot, source_hextile = path[i]
+			target_rot, target_hextile = path[i+1]
+			edge = self.get_edge_data(path[i],path[i+1])
+			accum += edge['weight']
+
+			print("coste acumulado {0} | {1} a ({2},{3}), coste {4}".format(accum, edge['type'], target_rot, target_hextile.name, edge['weight']))
+
+	def get_edge_data(self,a,b):
+		"""
+		Devuelve la información almacenada en un arco del grafo de movimiento
+		:param a: vértice a del arco
+		:param b: vértice b del arco
+		:return: diccionario con la información almacenada en el arco (a,b)
+		"""
+		return self.distance_graph.get_edge_data(a,b)
 
 
 class Hextile:
@@ -250,10 +475,10 @@ class Hextile:
 	}
 
 	def __init__(self, col, row, level, terrain_type, object_in_terrain, building_fce, collapsed_building, on_fire,
-			smoke, num_clubs, rivers, roads, neigbours=None):
+			smoke, num_clubs, rivers, roads, neigbors=None):
 
-		if not neigbours:
-			neigbours = {}
+		if not neigbors:
+			neigbors = {}
 
 		self.col = col
 		self.row = row
@@ -268,17 +493,17 @@ class Hextile:
 		self.num_poles = num_clubs
 		self.rivers = rivers
 		self.roads = roads
-		self.neighbours = neigbours
+		self.neighbors = neigbors
 
 	def __str__(self):
 		out = self.name + " | "
-		has_neighbours = False
-		for k in self.neighbours:
-			if self.neighbours[k]:
-				has_neighbours = True
-				out += "{0}_{1} ".format(k, self.neighbours[k].name)
+		has_neighbors = False
+		for k in self.neighbors:
+			if self.neighbors[k]:
+				has_neighbors = True
+				out += "{0}_{1} ".format(k, self.neighbors[k].name)
 
-		out += "| " if has_neighbours else ""
+		out += "| " if has_neighbors else ""
 
 		out += "{0}".format(self.level) + " "
 		out += self.TERRAIN_TYPES[self.terrain_type] + " "
@@ -297,3 +522,6 @@ class Hextile:
 
 	def __lt__(self, other):
 		return True
+
+	def __repr__(self):
+		return "<Hextile {0}>".format(self.name)

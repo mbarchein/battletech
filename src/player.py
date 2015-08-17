@@ -38,65 +38,77 @@ class Game:
 		Ejecuta la fase de movimiento
 		:return:
 		"""
-		print("* Mech jugador en hextile {0}".format(self.player_mech.hextile.name))
-		print("* Mech enemigo en hextile {0}".format(self.enemy_mech.hextile.name))
-		start = self.player_mech.hextile
-		goal  = self.enemy_mech.hextile
-		came_from, cost_so_far = a_star_search(
-			graph=self.map,
-			start=start,
-			goal=goal,
-			heuristic=lambda a,b:1,
-			cost=self.movement_cost
-		)
-		path = reconstruct_path(came_from, start, goal)
-		for hextile in path:
-			print(hextile.name, end=" ")
+		print("* Mech jugador en hextile {0}, rotación {1}".format(self.player_mech.hextile.name, self.player_mech.heading))
+		print("* Mech enemigo en hextile {0}, rotación {1}".format(self.enemy_mech.hextile.name, self.enemy_mech.heading))
+		source = (self.player_mech.heading, self.player_mech.hextile)
+		target = (1, self.enemy_mech.hextile)
 
+		astar_path = self.map.astar_path(source, target)
+		self.map.print_path(astar_path)
 
-	def movement_cost(self, a,b):
-		"""
-		Computa el coste de movimiento desde el Hextile a al b. Ambos hextiles deben ser adyacentes.
-		:param a: Hextile de origen
-		:param b: Hextile de destino
-		:return: int coste del movimiento
-		"""
-		cost = 0
+		# calcular movimientos máximos dentro del camino averiguado que se pueden realizar con los puntos de movimiento
+		# actuales
+		max_walk = self.player_mech.movement_walk
+		max_run = self.player_mech.movement_run
+		max_jump = self.player_mech.movement_jump
 
-		for heading, neighbour in a.neighbours.items():
-			if b == neighbour:
+		print("* Puntos de movimiento: Andar {0}, Correr {1}, Saltar {2}".format(max_walk, max_run, max_jump))
+
+		# Calcular máximo movimiento posible mediante la acción "Andar"
+		accum = 0
+		i = 0
+		while i < len(astar_path)-1:
+			cost = GameMap.simple_movement_cost(astar_path[i], astar_path[i+1])
+			accum += cost
+			if accum > max_walk:
 				break
+			i += 1
+		path_walk = astar_path[:i+1]
 
-		## Tipo de terreno
+		action = self.walk(path_walk)
+		self.save_action(action)
 
-		# Despejado o pavimentado
-		if a.terrain_type in (0,1):
-			cost += 1
 
-		# Agua
-		if a.terrain_type == 2:
-			if a.level == 1:
-				cost += 2
-			if a.level >= 2:
-				cost += 4
+	def walk(self, path):
+		"""
+		Genera los comandos para un movimiento de tipo "Andar" para la ruta indicada en 'path'. En el 'path', la primera
+		posición indica la ubicación de origen del mech
+		:param path: lista de tuplas (rot, hextile)
+		:return: lista con cadenas con las órdenes de movimiento
+		"""
+		out = [
+			"Andar",
+			path[-1][1].name,   # hextile destino
+			str(path[-1][0]),   # heading destino
+			"False",            # usar MASC
+			str(len(path)-1)      # Longitud de lista de pasos
+		]
 
-		# Pantanoso
-		if a.terrain_type == 4:
-			cost += 2
+		for i in range(0, len(path)-1):
+			source = path[i]
+			target = path[i+1]
+			current_heading, current_hextile = source
+			next_heading,next_hextile = target
 
-		## Cambio de elevación
-		level_change = abs(b.level - a.level)
-		if level_change == 0:
-			pass
-		elif level_change == 1:
-			cost += 1
-		elif level_change == 2:
-			cost += 2
-		else:
-			cost += 99999999999
+			edge = self.map.get_edge_data(source,target)
+			cost = edge['weight']
+			action = edge['type']
 
-		return cost
+			# Mover o rotar en la dirección que indica el arco en 1 unidad
+			out.append(action)
+			out.append("1")
+			print ("movimiento: {5} ({0},{1}) a ({2},{3}). Coste: {4}".format(source[0], source[1].name, target[0], target[1].name, cost, action))
 
+		print("* Generados {0} comandos de movimiento para jugador {1}".format(len(path)-1, self.player_id))
+		return out
+
+	def save_action(self, action):
+		filename = "accionJ{0}.sbt".format(self.player_id)
+		out = "\n".join(action)
+		f = open(filename, "w")
+		f.write(out)
+		f.close()
+		print("* Almacenado fichero de acción {0}".format(filename))
 
 
 def run():
