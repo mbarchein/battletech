@@ -73,7 +73,7 @@ class Game:
 		# Calcular máximo movimiento posible mediante la acción "Andar"
 		action_path = best_path.longest_movement(movement_points['walk'])
 		print(action_path)
-		action = self.walk(action_path)
+		action = self.walk(action_path, debug=True)
 		self.save_action(action)
 
 
@@ -90,10 +90,10 @@ class Game:
 
 		out = [
 			"Andar",
-			path[-1][1].name,   # hextile destino
-			str(path[-1][0]),   # heading destino
-			"False",            # usar MASC
-			str(len(path)-1)      # Longitud de lista de pasos
+			path[-1].hextile.name,   # hextile destino
+			str(path[-1].rotation),  # heading destino
+			"False",                 # usar MASC
+			str(len(path)-1)         # Longitud de lista de pasos
 		]
 
 		for i in range(0, len(path)-1):
@@ -107,7 +107,7 @@ class Game:
 			# Mover o rotar en la dirección que indica el arco en 1 unidad
 			out.append(action)
 			out.append("1")
-			if debug: print ("movimiento: {5} ({0},{1}) a ({2},{3}). Coste: {4}".format(source[0], source[1], target[0], target[1], cost, action))
+			if debug: print ("movimiento: {0} {1} a {2}. Coste: {3}".format(action, source, target, cost))
 
 		print("* Generados {0} comandos de movimiento para jugador {1}".format(len(path)-1, self.player_id))
 		return out

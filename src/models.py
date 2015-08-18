@@ -334,8 +334,8 @@ class GameMap:
 		return GameMap(mapdata=gamemap)
 
 
-	@staticmethod
-	def get_simple_movement_cost(graph, source, target):
+	@classmethod
+	def get_simple_movement_cost(cls, graph, source, target):
 		"""
 		Calcula el coste de un movimiento simple (rotación o traslación de 1 casilla) siempre que este sea posible
 		:param graph: Grafo sobre el que operar
@@ -343,11 +343,11 @@ class GameMap:
 		:param target: tupla (rotación, hextile) destino
 		:return: (int) coste del movimiento
 		"""
-		edge = graph.get_edge_data(source, target)
+		edge = cls.get_edge_data(graph, source, target)
 		if edge:
 			return edge['weight']
 		else:
-			raise ValueError("El arco ({0},{1}),({2},{3}) no existe en el grafo de movimientos permitidos".format(source[0], source[1], target[0], target[1]))
+			raise ValueError("El arco {0},{1} no existe en el grafo de movimientos permitidos".format(source, target))
 
 	@classmethod
 	def movement_cost(cls, source, target,restrictions=None):
@@ -460,8 +460,8 @@ class GameMap:
 		"""
 		Devuelve la información almacenada en un arco del grafo de movimiento
 		:param graph: Grafo de movimientos del que se va a obtener la información
-		:param a: vértice a del arco
-		:param b: vértice b del arco
+		:param a: (MechPosition) vértice a del arco
+		:param b: (MechPosition) vértice b del arco
 		:return: diccionario con la información almacenada en el arco (a,b)
 		"""
 		if type(a) == MechPosition:
@@ -470,7 +470,6 @@ class GameMap:
 		if type(b) == MechPosition:
 			b = (b.rotation, b.hextile)
 
-		print(a,b)
 		return graph.get_edge_data(a,b)
 
 
@@ -598,7 +597,7 @@ class MovementPath:
 		accum = 0
 		for i in range(0, len(path)-1):
 			target = path[i+1]
-			edge = self.graph.get_edge_data(path[i],path[i+1])
+			edge = self.map.get_edge_data(self.graph, path[i], path[i+1])
 			accum += edge['weight']
 		self.cost = accum
 
@@ -635,14 +634,14 @@ class MovementPath:
 		path = self.path
 		graph = self.graph
 
-		out = ["posición de inicio| ({0},{1})".format(*path[0])]
+		out = ["posición de inicio| {0}".format(path[0])]
 		accum = 0
 
 		for i in range(0, len(path)-1):
 			target = path[i+1]
 			edge = self.map.get_edge_data(graph,path[i],path[i+1])
 			accum += edge['weight']
-			out.append("acción {5} | coste acumulado {0} | {1} a ({2},{3}), coste {4}".format(accum, edge['action'], target[0], target[1], edge['weight'], i+1))
+			out.append("acción {0} | coste acumulado {1} | {2} a {3}, coste {4}".format(i+1, accum, edge['action'], target, edge['weight']))
 
 		out.append("coste total del camino: {0}. Número de acciones necesarias: {1}".format(self.cost, len(path)-1))
 		return "\n".join(out)
