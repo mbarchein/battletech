@@ -7,7 +7,7 @@ class Game:
 	def __init__(self, player_id, phase):
 		self.player_id = player_id
 		self.phase = phase
-		print("* Id. de player: {0}, fase actual: {1}". format(self.player_id, self.phase))
+		print("* Id de jugador actual: {0}, fase actual: {1}". format(self.player_id, self.phase))
 
 		# cargar el mapa
 		self.map = GameMap.parsefile(player_id=player_id)
@@ -48,7 +48,7 @@ class Game:
 		possible_paths = []
 
 		# "Andar"
-		path = self.map.best_path("walk", source, target, debug=True)
+		path = self.map.best_path("walk", source, target)
 		if path:
 			possible_paths.append(path)
 
@@ -72,9 +72,12 @@ class Game:
 
 		# Calcular máximo movimiento posible mediante la acción "Andar"
 		action_path = best_path.longest_movement(movement_points['walk'])
-		print(action_path)
-		action = self.walk(action_path, debug=True)
-		self.save_action(action)
+		#print(action_path)
+
+		# Generar listado de acciones y grabar fichero
+		action = self.walk(action_path)
+		filename = self.save_action(action)
+		print("* Almacenado fichero de acción {0}".format(filename))
 
 
 	def walk(self, action_path, debug=False):
@@ -109,17 +112,27 @@ class Game:
 			out.append("1")
 			if debug: print ("movimiento: {0} {1} a {2}. Coste: {3}".format(action, source, target, cost))
 
-		print("* Generados {0} comandos de movimiento para jugador {1}".format(len(path)-1, self.player_id))
+		print("* Generados {0} comandos de movimiento \"Andar\" para jugador {1}".format(len(path)-1, self.player_id))
 		return out
 
-	def save_action(self, action):
+	def save_action(self, action, debug=False):
+		"""
+		Genera fichero de acciones
+		:param action: lista de acciones (lista de str)
+		:param debug: Si es True, se muestra por la salida estándar el contenido escrito en el fichero
+		:return:
+		"""
 		filename = "accionJ{0}.sbt".format(self.player_id)
 		out = "\n".join(action)
 		f = open(filename, "w")
 		f.write(out)
 		f.close()
-		print("* Almacenado fichero de acción {0}".format(filename))
+		if debug:
+			print("------ inicio del fichero {0} ---------".format(filename))
+			print(out)
+			print("------ fin del fichero {0}    ---------".format(filename))
 
+		return filename
 
 def run():
 	if len(sys.argv) != 3:
