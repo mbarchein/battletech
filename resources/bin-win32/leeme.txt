@@ -1,0 +1,103 @@
+-------------------------------------
+- Ayuda sobre el programa LDVyC.exe -
+-------------------------------------
+
+1. Introducción
+---------------
+El programa LDVyC.exe es un programa que pretende facilitar la programación
+de jugadores automáticos para el Simulador de BattleTech.
+Este programa calcula los hexágonos que componen la Línea de Visión (LDV) 
+entre dos hexágonos dados e indica si hay LDV y si hay cobertura parcial.
+
+2. Uso del Programa
+-------------------
+Para que el programa LDVyC.exe funcione correctamente es necesario pasarle
+5 argumentos en la línea de comandos. El modo correcto de ejecutar el
+programa es el siguiente:
+
+	LDVyC.exe <nombre_fichero_mapa> <hexágono_origen> <suma_de_nivel_origen> <hexágono_destino> <suma_de_nivel_destino>
+
+La descripción de estos 5 argumentos es la siguiente:
+
+- <nombre_fichero_mapa>: se trata del fichero que contiene la descripción
+  del estado actual del mapa de juego. Este fichero es generado por el
+  Simulador de BattleTech cada vez que se precisa que el jugador automático
+  realice una acción.
+
+- <hexágono_origen>: se trata de un número de 4 cifras que indica el número
+  del hexágono de origen de la LDV a calcular.
+
+- <suma_de_nivel_origen>: se trata de un 1 o de un 0.
+  Si pasamos un 1 indicaremos al programa que el nivel del hexágono de
+  origen se debe aumentar en 1 (si queremos calcular la LDV de un Mech en
+  pie con algún hexágono, indicaríamos como hexágono de origen el hexágono
+  en el que se encuentra el Mech y como suma de nivel origen un 1 ya que, 
+  en temas de LDV, los Mechs en pie tienen una altura igual al nivel del 
+  hexágono + 1).
+  Si pasamos un 0 indicaremos al programa que el nivel del hexágono 
+  de origen se debe dejar tal cual (si queremos calcular la LDV de un Mech
+  cuerpo a tierra con algún hexágono, indicaríamos como hexágono de origen
+  el hexágono en el que se encuentra el Mech y como suma de nivel origen un
+  0 ya que, los mechs cuerpo a tierra tienen una altura igual al nivel del 
+  hexágono).
+
+- <hexágono_destino>: se trata de un número de 4 cifras que indica el número
+  del hexágono de destino de la LDV a calcular.
+
+- <suma_de_nivel_destino>: se trata de un 1 o de un 0.
+  Este argumento tiene un significado análogo a <suma_de_nivel_origen>.
+
+Cuando se ejecuta correctamente, el programa LDVyC.exe crea un fichero
+llamado LDV.sbt en el que se indican los hexágonos que componen la LDV,
+si hay LDV y si hay cobertura parcial. Este fichero se crea en el mismo
+directorio en el que se encuentra el programa LDVyC.exe.
+
+3. Ejemplos:
+------------
+Ejemplo 1:
+Supongamos que nuestro jugador automático es el número 3 de la partida; esto
+quiere decir que el fichero del mapa será mapaJ3.sbt. Si quisiesemos
+calcular la LDV entre un Mech que se encuentra de pie en el hexágono 0705 
+y otro que se encuentra cuerpo a tierra en el hexágono 0710, tendríamos
+que llamar al programa LDVyC.exe de la siguiente manera:
+
+	LDVyC.exe mapaJ3.sbt 0705 1 0710 0
+
+Si hubiese LDV y no hubiese cobertura parcial, se generaría el fichero
+LDV.sbt con el siguiente texto:
+
+	0706 0707 0708 0709
+	True
+	False
+
+Esto indica que:
+
+- Los hexágonos que componen la LDV son 0706, 0707, 0708 y 0709.
+- Hay LDV entre el mech del hexágono 0705 y el del hexágono 0710.
+- El mech del hexágono 0710 no tiene cobertura parcial con respecto al
+  mech del hexágono 0705.
+
+
+Ejemplo2:
+Supongamos que nuestro jugador automático es el número 2 de la partida; esto
+quiere decir que el fichero del mapa será mapaJ2.sbt. Si quisiesemos
+calcular la LDV entre un Mech que se encuentra cuerpo a tierra en el 
+hexágono 0705 y el hexágono 1006, tendríamos
+que llamar al programa LDVyC.exe de la siguiente manera:
+
+	LDVyC.exe mapaJ2.sbt 0705 0 1006 0
+
+Si no hubiese LDV y ni cobertura parcial, se generaría el fichero
+LDV.sbt con el siguiente texto:
+
+	0805 0906
+	False
+	False
+
+Esto indica que:
+
+- Los hexágonos que componen la LDV son 0805 y 0906.
+- No hay LDV entre el mech del hexágono 0705 y el hexágono 1006.
+- No hay tampoco cobertura parcial.
+
+ 
