@@ -570,8 +570,9 @@ class MechPosition:
 	def __str__(self):
 		return "({0},{1})".format(self.rotation, self.hextile)
 
-	def __cmp__(self, other):
-		return self.rotation == other.rotation and self.hextile==other.hextile
+	def __eq__(self, other):
+		return self.__dict__ == other.__dict__
+
 
 class MovementPath:
 	"""
