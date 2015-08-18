@@ -1,6 +1,7 @@
 import sys
+from networkx import NetworkXNoPath
 
-from models import Mech, GameMap
+from models import *
 
 class Game:
 	def __init__(self, player_id, phase):
@@ -34,46 +35,59 @@ class Game:
 	def movement_phase(self):
 		"""
 		Ejecuta la fase de movimiento
-		:return:
+		:return: None
 		"""
-		print("* Mech jugador en hextile {0}, rotación {1}".format(self.player_mech.hextile, self.player_mech.heading))
-		print("* Mech enemigo en hextile {0}, rotación {1}".format(self.enemy_mech.hextile, self.enemy_mech.heading))
-		source = (self.player_mech.heading, self.player_mech.hextile)
-		target = (1, self.enemy_mech.hextile)
+		player_position = MechPosition(self.player_mech.heading, self.player_mech.hextile)
+		enemy_position  = MechPosition(self.enemy_mech.heading, self.enemy_mech.hextile)
+		print("* Mech jugador en {0}".format(player_position))
+		print("* Mech enemigo en {0}".format(enemy_position))
+		source = player_position
+		target = enemy_position
 
-		astar_path = self.map.astar_path(source, target)
-		self.map.print_path(astar_path)
+		# Calcular posibles rutas al objetivo según diferentes métodos de movimiento y destinos
+		possible_paths = []
+
+		# "Andar"
+		path = self.map.best_path("walk", source, target, debug=True)
+		if path:
+			possible_paths.append(path)
+
+		# "Correr"
+		path = self.map.best_path("run", source, target)
+		if path:
+			possible_paths.append(path)
 
 		# calcular movimientos máximos dentro del camino averiguado que se pueden realizar con los puntos de movimiento
 		# actuales
-		max_walk = self.player_mech.movement_walk
-		max_run = self.player_mech.movement_run
-		max_jump = self.player_mech.movement_jump
+		movement_points = {
+			'walk': self.player_mech.movement_walk,
+			'run' : self.player_mech.movement_run,
+			'jump': self.player_mech.movement_jump
+		}
 
-		print("* Puntos de movimiento: Andar {0}, Correr {1}, Saltar {2}".format(max_walk, max_run, max_jump))
+		print("* Puntos de movimiento: Andar {walk}, Correr {run}, Saltar {jump}".format(**movement_points))
+
+		# Determinar mejor tipo de movimiento
+		best_path = possible_paths[0]
 
 		# Calcular máximo movimiento posible mediante la acción "Andar"
-		accum = 0
-		i = 0
-		while i < len(astar_path)-1:
-			cost = self.map.get_simple_movement_cost(astar_path[i], astar_path[i+1])
-			accum += cost
-			if accum > max_walk:
-				break
-			i += 1
-		path_walk = astar_path[:i+1]
-
-		action = self.walk(path_walk)
+		action_path = best_path.longest_movement(movement_points['walk'])
+		print(action_path)
+		action = self.walk(action_path)
 		self.save_action(action)
 
 
-	def walk(self, path):
+	def walk(self, action_path, debug=False):
 		"""
 		Genera los comandos para un movimiento de tipo "Andar" para la ruta indicada en 'path'. En el 'path', la primera
 		posición indica la ubicación de origen del mech
-		:param path: lista de tuplas (rot, hextile)
+		:param action_path: (MovementPath) Camino que se va a seguir
+		:param debug: (boolean) Si es True se muestra información de depuración
 		:return: lista con cadenas con las órdenes de movimiento
 		"""
+
+		path = action_path.path
+
 		out = [
 			"Andar",
 			path[-1][1].name,   # hextile destino
@@ -86,14 +100,14 @@ class Game:
 			source = path[i]
 			target = path[i+1]
 
-			edge = self.map.get_edge_data(source,target)
+			edge = self.map.get_edge_data(self.map.distance_graph['walk'], source, target)
 			cost = edge['weight']
 			action = edge['action']
 
 			# Mover o rotar en la dirección que indica el arco en 1 unidad
 			out.append(action)
 			out.append("1")
-			print ("movimiento: {5} ({0},{1}) a ({2},{3}). Coste: {4}".format(source[0], source[1], target[0], target[1], cost, action))
+			if debug: print ("movimiento: {5} ({0},{1}) a ({2},{3}). Coste: {4}".format(source[0], source[1], target[0], target[1], cost, action))
 
 		print("* Generados {0} comandos de movimiento para jugador {1}".format(len(path)-1, self.player_id))
 		return out
