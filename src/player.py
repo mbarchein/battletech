@@ -1,6 +1,4 @@
 import sys
-from networkx import NetworkXNoPath
-
 from models import *
 
 class Game:

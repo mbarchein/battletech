@@ -240,7 +240,7 @@ class GameMap:
 			if debug:
 				print ("* Camino hasta objetivo {1} mediante \"{0}\"".format(action, target))
 				print(path)
-		except networkx.NetworkXNoPath as e:
+		except networkx.NetworkXNoPath:
 			if debug:
 				print ("* No hay camino hasta objetivo ({1},{2}) mediante \"{0}\"".format(action, *target))
 			path = None
@@ -578,15 +578,15 @@ class MovementPath:
 	"""
 	Clase que encapsula un "Camino" o ruta a través de un grafo de movimiento ('aka' grafo de distancias)
 	"""
-	def __init__(self, map, path, movement_type):
+	def __init__(self, gamemap, path, movement_type):
 		# Mapa asociado
-		self.map = map
+		self.map = gamemap
 
 		# Recorrido que se sigue. Es una lista de tuplas (rot, hextile)
 		self.path = path
 
 		# Grafo de movimiento asociado al recorrido
-		self.graph = map.distance_graph[movement_type]
+		self.graph = gamemap.distance_graph[movement_type]
 
 		# Tipo de movimiento asociado ("walk" o "run")
 		self.movement_type = movement_type
@@ -597,7 +597,6 @@ class MovementPath:
 		# Calcular coste del camino
 		accum = 0
 		for i in range(0, len(path)-1):
-			target = path[i+1]
 			edge = self.map.get_edge_data(self.graph, path[i], path[i+1])
 			accum += edge['weight']
 		self.cost = accum
