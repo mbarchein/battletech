@@ -822,3 +822,49 @@ class LineOfSightAndCover:
 		)
 
 		return out
+
+
+class Initiative:
+	"""
+	Representación de la información de iniciativa en la fase actual
+	"""
+
+	def __init__(self, player_id, initiative):
+		# Id del jugador
+		self.player_id = player_id
+
+		# Lista de (int) con el orden de iniciativas. Cada posición se corresponde con el player_id de un mech
+		self.initiative = initiative
+
+	@classmethod
+	def parsefile(cls, player_id):
+		# Fichero con datos de iniciativa
+
+		f = open("iniciativaJ{0}.sbt".format(player_id), "r")
+		num_players = readint(f)
+
+		data = {
+			'num_players': num_players,
+			'initiative': [readint(f) for i in range(num_players)]
+		}
+
+		f.close()
+		return Initiative(player_id=player_id, initiative=data)
+
+	def player_has_initiative(self):
+		"""
+		Indica si el jugador ha ganado la iniciativa en este turno
+		:return: (bool) True si el jugador tiene la iniciativa o False en caso contrario
+		"""
+		return self.initiative[0] == self.player_id
+
+	def mech_has_initiative(self, mech):
+		"""
+		Indica si el Mech ha ganado la iniciativa en este turno
+
+		:type mech: (Mech) mech para el que se va a determinar si tiene la iniciativa
+		:return: (bool) True si el mech tiene la iniciativa o False en caso contrario
+		"""
+		return self.initiative[0] == mech.id
+
+
