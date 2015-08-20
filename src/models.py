@@ -1,4 +1,7 @@
 import networkx
+import os
+import sys
+import subprocess
 from util import readstr, readint, readbool
 
 
@@ -36,6 +39,7 @@ class Mech:
 		self.slots = slots
 		self.shooting_locations = shooting_locations
 		self.ejection_ready_ammo = ejection_ready_ammo
+
 
 	@staticmethod
 	def parsefile(player_id):
@@ -95,6 +99,8 @@ class Mech:
 			mech = Mech(mech_id=mech_id, **mechdata)
 			mechs.append(mech)
 
+		f.close()
+
 		# devolver listado de mechs
 		return mechs
 
@@ -123,6 +129,7 @@ class GameMap:
 		self.map = mapdata
 		self.map_byname = {}
 		self.distance_graph = {}
+		self.adjacency_graph = None
 		self.width = len(mapdata)
 		self.height = len(mapdata[list(mapdata.keys())[0]])
 
@@ -135,11 +142,27 @@ class GameMap:
 
 		self.distance_graph['walk'] = self._walk_map()
 		self.distance_graph['run'] = self._run_map()
+		self.adjacency_graph = self._hextile_adjacency_graph()
+
+	def _hextile_adjacency_graph(self):
+		"""
+		Genera un grago de adyacencias entre Hextiles, se usa para calcular radios y casillas "interesantes" para
+		movimientos. Los nodos del grafo son los nombres de los Hextiles
+		:return: (Graph) Grafo no dirigido de adyacencias entre Hextiles
+		"""
+		G = networkx.Graph()
+		for hextile in self.map_byname.values():
+			for neighbor in hextile.neighbors.values():
+				# Añadir arco entre nodos. Para este grafo, cada nodo estará separado de cualquiera de sus vecinos por
+				# una distancia de 1
+				G.add_edge(hextile.name, neighbor.name)
+
+		return G
 
 	def _walk_map(self):
 		"""
 		Computa el grafo de caminos posibles que se pueden recorrer con el tipo de movimiento "Andar"
-		:return: (DiGraph) Grafo dirigido con caminos posibles y costes
+		:return: (DiGraph) Grafo dirigido con caminos posibles y costes. Los nodos son de tipo MechPosition
 		"""
 
 		# Crear grafo dirigido de movimientos permitidos con coste de acción teniendo en cuenta rotaciones
@@ -174,7 +197,7 @@ class GameMap:
 	def _run_map(self):
 		"""
 		Computa el grafo de caminos posibles que se pueden recorrer con el tipo de movimiento "Correr"
-		:return: (DiGraph) Grafo dirigido con caminos posibles y costes
+		:return: (DiGraph) Grafo dirigido con caminos posibles y costes. Los nodos son de tipo MechPosition
 		"""
 
 		# Crear grafo dirigido de movimientos permitidos con coste de acción teniendo en cuenta rotaciones
@@ -242,10 +265,23 @@ class GameMap:
 				print(path)
 		except networkx.NetworkXNoPath:
 			if debug:
-				print ("* No hay camino hasta objetivo ({1},{2}) mediante \"{0}\"".format(action, *target))
+				print ("* No hay camino hasta objetivo {1} mediante \"{0}\"".format(action, target))
 			path = None
 
 		return path
+
+	def hextiles_in_max_radius(self, hextile, radius):
+		"""
+		Obtiene todos los hextiles que se encuentran a un radio máximi r con respecto a uno dado
+		:return: (list) lista de hextiles
+		"""
+		G = self.adjacency_graph
+		s = hextile.name
+
+		H = networkx.ego_graph(G, s, radius, center=False)
+		nodes = [self.map_byname[hextile_name] for hextile_name in H.nodes()]
+		return nodes
+
 
 	@classmethod
 	def parsefile(cls, player_id):
@@ -329,6 +365,8 @@ class GameMap:
 				for key in keys:
 					if gamemap[q][r].neighbors[key] is None:
 						gamemap[q][r].neighbors.pop(key, None)
+
+		f.close()
 
 		# Construir y devolver instancia del mapa
 		return GameMap(mapdata=gamemap)
@@ -546,7 +584,7 @@ class Hextile:
 		return True
 
 	def __repr__(self):
-		return "<Hextile {0}>".format(self.name)
+		return self.__str__()
 
 
 class MechPosition:
@@ -646,3 +684,92 @@ class MovementPath:
 		out.append("coste total del camino: {0}. Número de acciones necesarias: {1}".format(self.cost, len(path)-1))
 		return "\n".join(out)
 
+
+class LineOfSightAndCover:
+	"""
+	Representación de una línea de visión entre dos hexágonos
+	"""
+
+	def __init__(self, source, target, path, has_line_of_sight, has_partial_cover):
+		self.source = source
+		self.target = target
+		self.path = path
+		self.has_line_of_sight = has_line_of_sight
+		self.has_partial_cover = has_partial_cover
+
+	@staticmethod
+	def calculate(player_id, gamemap, source, source_level_sum, target, target_level_sum, debug=False):
+		"""
+		Obtiene el cálculo de la línea de visión y cobertura
+		:param player_id: (int)  identificador del jugador
+		:param gamemap:          (GameMap) mapa de juego asociado
+		:param source:           (Hextile)|(MechPosition)|(str) casilla de origen
+		:param source_level_sum: (bool) True para sumar 1 a la elevación de origen
+		:param target:           (Hextile)|(MechPosition)|(str) casilla de destino
+		:param target_level_sum: (bool) True para sumar 1 a la elevación de destino
+		:param debug:            (bool) True para mostrar información de depuración
+		:return:
+		"""
+		executable_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "resources", "bin-win32"))
+		executable_file = os.path.join(executable_dir, "LDVyC.exe")
+
+		# Permitir diferentes tipos de dato para source y target
+		if type(source) == Hextile:
+			source = source.name
+		elif type(source) == MechPosition:
+			source = source.hextile.name
+
+		if type(target) == Hextile:
+			target = target.name
+		if type(target) == MechPosition:
+			target = target.hextile.name
+
+		cmd = [
+			executable_file,
+			"mapaJ{0}.sbt".format(player_id),
+			source,
+			"1" if source_level_sum else "0",
+			target,
+			"1" if target_level_sum else "0",
+		]
+
+		# Ejecutar comando con wine en Linux
+		if sys.platform == "linux":
+			cmd = ["wine"] + cmd
+
+		if debug:
+			print(" ".join(cmd))
+		output = subprocess.check_output(cmd)
+
+		if debug:
+			output = output.decode("cp850")
+			print(output)
+
+		# Parsear fichero con resultado
+		output_file = os.path.join(executable_dir, "LDV.sbt")
+		f = open(output_file, "r")
+
+		# Calcular lista de Hextiles de la linea de visión
+		path_str = readstr(f)
+		path = [gamemap.map_byname[i] for i in path_str.split(" ")] if len(path_str)>0 else []
+
+		data = {
+			"path": path,
+			"has_line_of_sight": readbool(f),
+			"has_partial_cover": readbool(f)
+		}
+
+		f.close()
+		out =  LineOfSightAndCover(source=gamemap.map_byname[source], target=gamemap.map_byname[target], **data)
+		return out
+
+	def __str__(self):
+		out = "Línea de visión entre {source} y {target}: {lv} | Cobertura parcial: {cover} | Camino: {path}".format(
+			source=self.source,
+			target=self.target,
+			lv=self.has_line_of_sight,
+			cover=self.has_partial_cover,
+			path=[hextile for hextile in self.path]
+		)
+
+		return out

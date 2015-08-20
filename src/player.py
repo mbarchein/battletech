@@ -27,6 +27,9 @@ class Game:
 		Realiza la acción adecuada para la fase actual
 		:return:
 		"""
+		source = MechPosition(self.player_mech.heading, self.player_mech.hextile)
+		target  = MechPosition(self.enemy_mech.heading, self.enemy_mech.hextile)
+
 		if self.phase == "Movimiento":
 			self.movement_phase()
 
@@ -37,8 +40,17 @@ class Game:
 		"""
 		player_position = MechPosition(self.player_mech.heading, self.player_mech.hextile)
 		enemy_position  = MechPosition(self.enemy_mech.heading, self.enemy_mech.hextile)
+
 		print("* Mech jugador en {0}".format(player_position))
 		print("* Mech enemigo en {0}".format(enemy_position))
+
+		# Buscar hextiles "interesantes" para movimiento
+		candidate_targets = self.map.hextiles_in_max_radius(enemy_position.hextile, 3)
+		print(candidate_targets)
+		lines_sc = [LineOfSightAndCover.calculate(self.player_id, self.map, c, True, enemy_position, True) for c in candidate_targets]
+		for line_sc in lines_sc:
+			print(line_sc)
+
 		source = player_position
 		target = enemy_position
 
@@ -46,12 +58,12 @@ class Game:
 		possible_paths = []
 
 		# "Andar"
-		path = self.map.best_path("walk", source, target)
+		path = self.map.best_path("walk", source, target, debug=True)
 		if path:
 			possible_paths.append(path)
 
 		# "Correr"
-		path = self.map.best_path("run", source, target)
+		path = self.map.best_path("run", source, target, debug=True)
 		if path:
 			possible_paths.append(path)
 
