@@ -183,7 +183,7 @@ class GameMap:
 				v = MechPosition(rotation, neighbor)
 
 				# Coste del movimiento
-				weight = self.movement_cost(u.hextile, v.hextile)
+				weight = self.movement_cost(u, v, restrictions=[])
 
 				# Si no se obtiene distancia, es que se trata de un camino imposible de seguir y en ese caso no se añade
 				# al grafo de movimientos válidos
@@ -197,7 +197,7 @@ class GameMap:
 				if backward_rot in hextile.neighbors:
 					backward_neighbor = hextile.neighbors[backward_rot]
 					v = MechPosition(rotation, backward_neighbor)
-					weight = self.movement_cost(u.hextile, v.hextile, restrictions=["backward"])
+					weight = self.movement_cost(u, v, restrictions=["backward"])
 					if weight:
 						G.add_edge(u.tuple(), v.tuple(), weight=weight, action="Atras")
 
@@ -228,7 +228,7 @@ class GameMap:
 				v = MechPosition(rotation, neighbor)
 
 				# Coste del movimiento
-				weight = self.movement_cost(hextile, neighbor, restrictions=["running"])
+				weight = self.movement_cost(u, v, restrictions=["running"])
 
 				# Si no se obtiene distancia, es que se trata de un camino imposible de seguir y en ese caso no se añade
 				# al grafo de movimientos válidos
@@ -254,14 +254,14 @@ class GameMap:
 			for i in range(1,6):
 				u = MechPosition(i, hextile)
 				v = MechPosition(i+1, hextile)
-				G.add_edge(u.tuple(), v.tuple(), weight=self.rotation_cost(u, v), action="Derecha")
-				G.add_edge(v.tuple(), u.tuple(), weight=self.rotation_cost(v, u), action="Izquierda")
+				G.add_edge(u.tuple(), v.tuple(), weight=self.movement_cost(u, v), action="Derecha")
+				G.add_edge(v.tuple(), u.tuple(), weight=self.movement_cost(v, u), action="Izquierda")
 
 			# giro de 6 <--> 1
 			u = MechPosition(6, hextile)
 			v = MechPosition(1, hextile)
-			G.add_edge(u.tuple(), v.tuple(), weight=self.rotation_cost(u, v), action="Derecha")
-			G.add_edge(v.tuple(), u.tuple(), weight=self.rotation_cost(v, u), action="Izquierda")
+			G.add_edge(u.tuple(), v.tuple(), weight=self.movement_cost(u, v), action="Derecha")
+			G.add_edge(v.tuple(), u.tuple(), weight=self.movement_cost(v, u), action="Izquierda")
 
 
 	def __str__(self):
@@ -433,9 +433,11 @@ class GameMap:
 	@classmethod
 	def movement_cost(cls, source, target,restrictions=None):
 		"""
-		Computa el coste de movimiento desde el Hextile a al b. Ambos hextiles deben ser adyacentes.
-		:param source: Hextile de origen
-		:param target: Hextile de destino
+		Computa el coste de movimiento desde la MechPosition a --> b. Ambas MechPosition deben corresponderse a Hextiles
+		adyacentes.
+
+		:param source: (MechPosition) origen
+		:param target: (MechPosition) destino
 		:param restrictions: Lista de restricciones (str) a tener en cuenta a la hora de computar costes. Se reconocen
 		                     las siguientes restricciones:
 		                         "backward" --> El mech está caminando hacia atrás
@@ -445,42 +447,42 @@ class GameMap:
 		if not restrictions:
 			restrictions = []
 
-		# Coste acumulado
-		cost = 0
+		# Coste de rotación
+		cost = cls.rotation_cost(source.rotation, target.rotation)
 
 		# Se cambiará a True si no es posible realizar el movimiento
 		impossible = False
 
-		# El coste de no moverse es 0
-		if source == target:
-			return 0
+		# El coste de no cambiar de Hextile es 0, por lo que se finaliza el cálculo
+		if source.hextile == target.hextile:
+			return cost
 
 		################################
 		## Tipo de terreno
 		################################
 		# Despejado o pavimentado
-		if target.terrain_type in (0,1):
+		if target.hextile.terrain_type in (0,1):
 			cost += 1
 
 		# Agua
-		if target.terrain_type == 2:
+		if target.hextile.terrain_type == 2:
 			# Si el mech está corriendo, no puede entrar en areas con agua de profundidad 1 o mayor
-			if "running" in restrictions and target.level<0:
+			if "running" in restrictions and target.hextile.level<0:
 				impossible = True
 
-			if target.level == -1:
+			if target.hextile.level == -1:
 				cost += 2
-			if target.level >= -2:
+			if target.hextile.level >= -2:
 				cost += 4
 
 		# Pantanoso
-		if target.terrain_type == 4:
+		if target.hextile.terrain_type == 4:
 			cost += 2
 
 		################################
 		## Cambio de elevación
 		################################
-		level_change = abs(target.level - source.level)
+		level_change = abs(target.hextile.level - source.hextile.level)
 
 		# Si el mech está caminando hacia atrás, no puede cambiar de nivel de elevación
 		if "bacward" in restrictions and level_change != 0:
@@ -501,15 +503,15 @@ class GameMap:
 		##################################
 
 		# Escombros
-		if target.object_type == 0:
+		if target.hextile.object_type == 0:
 			cost += 2
 
 		# Bosque disperso
-		elif target.object_type == 1:
+		elif target.hextile.object_type == 1:
 			cost += 2
 
 		# Bosque denso
-		elif target.object_type == 1:
+		elif target.hextile.object_type == 1:
 			cost += 3
 
 		## Resultado
@@ -519,18 +521,16 @@ class GameMap:
 			return cost
 
 	@classmethod
-	def rotation_cost(cls, source, target):
+	def rotation_cost(cls, source_rotation, target_rotation):
 		"""
-		Calcula el coste para realizar un giro
-		:param source: (MechPosition) posición inicial
-		:param target: (MechPosition) posición final
+		Calcula el coste para realizar un giro.
+		:param source: (int) rotación inicial
+		:param target: (int) rotación final
 		:return: (int) coste para efectuar el giro
 		"""
 
-		if source.hextile != target.hextile:
-			raise ValueError("La rotación debe ser dentro del mismo hextile ({0},{1})".format(source, target))
 
-		diff = (target.rotation - source.rotation) % 6
+		diff = (target_rotation - source_rotation) % 6
 		if diff >= 4:
 			return 6-diff
 		else:
