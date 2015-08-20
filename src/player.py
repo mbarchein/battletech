@@ -30,8 +30,24 @@ class Game:
 		source = MechPosition(self.player_mech.heading, self.player_mech.hextile)
 		target  = MechPosition(self.enemy_mech.heading, self.enemy_mech.hextile)
 
+		# Acciones que se van a grabar en el fichero de salida
+		action = []
+
 		if self.phase == "Movimiento":
-			self.movement_phase()
+			action = self.movement_phase()
+		if self.phase == "Reaccion":
+			pass
+		if self.phase == "AtaqueArmas":
+			pass
+		if self.phase == "AtaqueFisico":
+			pass
+		if self.phase == "FinalTurno":
+			pass
+
+		# Grabar acciones
+		filename = self.save_action(action)
+		print("* Almacenado fichero de acción {0}".format(filename))
+
 
 	def movement_phase(self):
 		"""
@@ -43,6 +59,12 @@ class Game:
 
 		print("* Mech jugador en {0}".format(player_position))
 		print("* Mech enemigo en {0}".format(enemy_position))
+
+		# Determinar cuales son las distancias máximas a las que puede llegar el mech enemigo en su fase de movimiento
+		# Como no podemos saber los puntos de moniviento que tiene el mech enemigo, asumiremos un valor fijo para estimar
+		# su radio de movimiento
+		estimated_enemy_movement_points = 4
+		estimated_enemy_farthest_movement_tiles = self.map.farthest_movemnts_possible(enemy_position, estimated_enemy_movement_points, "walk")
 
 		# Buscar hextiles "interesantes" para movimiento
 		candidate_targets = self.map.hextiles_in_max_radius(enemy_position.hextile, 3)
@@ -84,11 +106,9 @@ class Game:
 		action_path = best_path.longest_movement(movement_points['walk'])
 		#print(action_path)
 
-		# Generar listado de acciones y grabar fichero
+		# Generar y devolver acciones
 		action = self.walk(action_path)
-		filename = self.save_action(action)
-		print("* Almacenado fichero de acción {0}".format(filename))
-
+		return action
 
 	def walk(self, action_path, debug=False):
 		"""
@@ -113,7 +133,7 @@ class Game:
 			source = path[i]
 			target = path[i+1]
 
-			edge = self.map.get_edge_data(self.map.distance_graph['walk'], source, target)
+			edge = self.map.get_edge_data(self.map.movement_graph['walk'], source, target)
 			cost = edge['weight']
 			action = edge['action']
 

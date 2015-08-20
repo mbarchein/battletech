@@ -128,7 +128,7 @@ class GameMap:
 		"""
 		self.map = mapdata
 		self.map_byname = {}
-		self.distance_graph = {}
+		self.movement_graph = {}
 		self.adjacency_graph = None
 		self.width = len(mapdata)
 		self.height = len(mapdata[list(mapdata.keys())[0]])
@@ -140,8 +140,8 @@ class GameMap:
 			for _,hextile in col.items():
 				self.map_byname[hextile.name] = hextile
 
-		self.distance_graph['walk'] = self._walk_map()
-		self.distance_graph['run'] = self._run_map()
+		self.movement_graph['walk'] = self._walk_map()
+		self.movement_graph['run'] = self._run_map()
 		self.adjacency_graph = self._hextile_adjacency_graph()
 
 	def _hextile_adjacency_graph(self):
@@ -176,10 +176,19 @@ class GameMap:
 			# que este último esté permitido (se mantiene rotación en ambos movimientos). Se calcula para cada movimiento
 			# permitido el coste, teniendo en cuenta tipos de terreno, elevación, etc.
 			for rotation, neighbor in hextile.neighbors.items():
+				# Posición de inicio y encaramiento
+				u = MechPosition(rotation, hextile)
+
 				# Vecino en dirección "Adelante"
-				weight = self.movement_cost(hextile, neighbor)
+				v = MechPosition(rotation, neighbor)
+
+				# Coste del movimiento
+				weight = self.movement_cost(u.hextile, v.hextile)
+
+				# Si no se obtiene distancia, es que se trata de un camino imposible de seguir y en ese caso no se añade
+				# al grafo de movimientos válidos
 				if weight:
-					G.add_edge((rotation, hextile), (rotation, neighbor), weight=weight, action="Adelante")
+					G.add_edge(u.tuple(), v.tuple(), weight=weight, action="Adelante")
 
 				# rotación correspondiente a ir "hacia atrás" con respecto al source
 				backward_rot = ((rotation + 2) % 6) + 1
@@ -187,9 +196,10 @@ class GameMap:
 				# Vecino en dirección "Atras"
 				if backward_rot in hextile.neighbors:
 					backward_neighbor = hextile.neighbors[backward_rot]
-					weight = self.movement_cost(hextile, backward_neighbor, restrictions=["backward"])
+					v = MechPosition(rotation, backward_neighbor)
+					weight = self.movement_cost(u.hextile, v.hextile, restrictions=["backward"])
 					if weight:
-						G.add_edge((rotation, hextile), (rotation, backward_neighbor), weight=weight, action="Atras")
+						G.add_edge(u.tuple(), v.tuple(), weight=weight, action="Atras")
 
 		return G
 		#for edge in G.edges(): print("({0},{1})".format(*edge))
@@ -211,10 +221,19 @@ class GameMap:
 			# si el tipo de movimiento es "Correr"). Se calcula para cada movimiento permitido el coste, teniendo en
 			# cuenta tipos de terreno, elevación, etc.
 			for rotation, neighbor in hextile.neighbors.items():
+				# Posición de inicio y encaramiento
+				u = MechPosition(rotation, hextile)
+
 				# Vecino en dirección "Adelante"
+				v = MechPosition(rotation, neighbor)
+
+				# Coste del movimiento
 				weight = self.movement_cost(hextile, neighbor, restrictions=["running"])
+
+				# Si no se obtiene distancia, es que se trata de un camino imposible de seguir y en ese caso no se añade
+				# al grafo de movimientos válidos
 				if weight:
-					G.add_edge((rotation, hextile), (rotation, neighbor), weight=weight, action="Adelante")
+					G.add_edge(u.tuple(), v.tuple(), weight=weight, action="Adelante")
 
 		return G
 		#for edge in G.edges(): print("({0},{1})".format(*edge))
@@ -230,11 +249,19 @@ class GameMap:
 		for name,hextile in self.map_byname.items():
 			# Crear arcos "internos" entre las seis caras del hexágono, con un coste de movimiento de 1 asociado a la
 			# rotación del mech hacia una cara adyacente del hexágono
+
+			# giros de 1 <--> 2, ... , 5 <--> 6
 			for i in range(1,6):
-				G.add_edge((i, hextile), (i+1, hextile), weight=self.rotation_cost((i, hextile), (i+1, hextile)), action="Derecha")
-				G.add_edge((i+1, hextile), (i, hextile), weight=self.rotation_cost((i, hextile), (i+1, hextile)), action="Izquierda")
-			G.add_edge((6, hextile), (1, hextile), weight=self.rotation_cost((6, hextile), (1, hextile)), action="Derecha")
-			G.add_edge((1, hextile), (6, hextile), weight=self.rotation_cost((1, hextile), (6, hextile)), action="Izquierda")
+				u = MechPosition(i, hextile)
+				v = MechPosition(i+1, hextile)
+				G.add_edge(u.tuple(), v.tuple(), weight=self.rotation_cost(u, v), action="Derecha")
+				G.add_edge(v.tuple(), u.tuple(), weight=self.rotation_cost(v, u), action="Izquierda")
+
+			# giro de 6 <--> 1
+			u = MechPosition(6, hextile)
+			v = MechPosition(1, hextile)
+			G.add_edge(u.tuple(), v.tuple(), weight=self.rotation_cost(u, v), action="Derecha")
+			G.add_edge(v.tuple(), u.tuple(), weight=self.rotation_cost(v, u), action="Izquierda")
 
 
 	def __str__(self):
@@ -247,7 +274,8 @@ class GameMap:
 
 	def best_path(self, movement_type, source, target, debug=False):
 		"""
-		Obtiene el mejor camino entre dos puntos del grafo de movimientos para el tipo de movimiento indicado
+		Obtiene el mejor camino entre dos puntos del grafo de movimientos para el tipo de movimiento indicado. Utiliza
+		el algoritmo A* para examinar los grafos de movimientos permitidos
 		:param movement_type: (str) tipo de movimiento. Puede ser "walk" o "run"
 		:param source: (MechPosition) posición de inicio
 		:param target: (MechPosition) posición destino
@@ -257,7 +285,7 @@ class GameMap:
 		action = "Andar" if movement_type=="walk" else "Correr"
 
 		try:
-			astar_path = networkx.astar_path(self.distance_graph[movement_type], (source.rotation, source.hextile), (target.rotation, target.hextile))
+			astar_path = networkx.astar_path(self.movement_graph[movement_type], source.tuple(), target.tuple())
 			astar_path_mechposition = [MechPosition(*x) for x in  astar_path]
 			path = MovementPath(self, astar_path_mechposition, movement_type)
 			if debug:
@@ -282,6 +310,21 @@ class GameMap:
 		nodes = [self.map_byname[hextile_name] for hextile_name in H.nodes()]
 		return nodes
 
+	def farthest_movemnts_possible(self, source, movement_points, movement_type):
+		"""
+		Devuelve una lista de los todos los hextiles a los que se puede llegar desde el origen invirtiendo como máximo
+		el número de puntos de movimiento indicados y realizando el tipo de movimiento 'movement_type'
+		:param source: (MechPosition) posición de inicio
+		:param movement_points: (int) número máximo de puntos de movimiento que se van a invertir
+		:param movement_type: (str) "walk" o "run"
+		:return: (list) lista de Hextiles
+		"""
+
+		G = self.movement_graph[movement_type]
+		targets_paths = networkx.single_source_shortest_path(G, source.tuple(), movement_points)
+		targets = targets_paths.keys()
+		print(targets)
+		return targets
 
 	@classmethod
 	def parsefile(cls, player_id):
@@ -479,15 +522,15 @@ class GameMap:
 	def rotation_cost(cls, source, target):
 		"""
 		Calcula el coste para realizar un giro
-		:param source: (rot, hextile) posición inicial
-		:param target: (rot, hextile) posición final
+		:param source: (MechPosition) posición inicial
+		:param target: (MechPosition) posición final
 		:return: (int) coste para efectuar el giro
 		"""
 
-		if source[1] != target[1]:
-			raise ValueError("La rotación debe ser dentro del mismo hextile ({0},{1}), ({2},{3})".format(source[0], source[1], target[0], target[1]))
+		if source.hextile != target.hextile:
+			raise ValueError("La rotación debe ser dentro del mismo hextile ({0},{1})".format(source, target))
 
-		diff = (target[0] - source[0]) % 6
+		diff = (target.rotation - source.rotation) % 6
 		if diff >= 4:
 			return 6-diff
 		else:
@@ -503,10 +546,10 @@ class GameMap:
 		:return: diccionario con la información almacenada en el arco (a,b)
 		"""
 		if type(a) == MechPosition:
-			a = (a.rotation, a.hextile)
+			a = a.tuple()
 
 		if type(b) == MechPosition:
-			b = (b.rotation, b.hextile)
+			b = b.tuple()
 
 		return graph.get_edge_data(a,b)
 
@@ -611,6 +654,12 @@ class MechPosition:
 	def __eq__(self, other):
 		return self.__dict__ == other.__dict__
 
+	def tuple(self):
+		"""
+		Devuelve una representación en forma de tupla de la instancia
+		"""
+		return self.rotation, self.hextile
+
 
 class MovementPath:
 	"""
@@ -624,7 +673,7 @@ class MovementPath:
 		self.path = path
 
 		# Grafo de movimiento asociado al recorrido
-		self.graph = gamemap.distance_graph[movement_type]
+		self.graph = gamemap.movement_graph[movement_type]
 
 		# Tipo de movimiento asociado ("walk" o "run")
 		self.movement_type = movement_type
@@ -655,7 +704,7 @@ class MovementPath:
 		i = 0
 
 		while i < len(path)-1:
-			cost = self.map.get_simple_movement_cost(self.map.distance_graph[movement_type], path[i], path[i+1])
+			cost = self.map.get_simple_movement_cost(self.map.movement_graph[movement_type], path[i], path[i+1])
 			accum += cost
 			if accum > movement_points:
 				break
