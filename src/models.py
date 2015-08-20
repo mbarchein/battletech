@@ -836,27 +836,28 @@ class Initiative:
 		# Lista de (int) con el orden de iniciativas. Cada posición se corresponde con el player_id de un mech
 		self.initiative = initiative
 
+	def __str__(self):
+		l = [str(i) for i
+			in self.initiative]
+		return " ".join(l)
+
 	@classmethod
 	def parsefile(cls, player_id):
 		# Fichero con datos de iniciativa
 
 		f = open("iniciativaJ{0}.sbt".format(player_id), "r")
 		num_players = readint(f)
-
-		data = {
-			'num_players': num_players,
-			'initiative': [readint(f) for _ in range(num_players)]
-		}
-
+		initiative = [readint(f) for _ in range(num_players)]
 		f.close()
-		return Initiative(player_id=player_id, initiative=data)
+
+		return Initiative(player_id=player_id, initiative=initiative)
 
 	def player_has_initiative(self):
 		"""
 		Indica si el jugador ha ganado la iniciativa en este turno
 		:return: (bool) True si el jugador tiene la iniciativa o False en caso contrario
 		"""
-		return self.initiative[0] == self.player_id
+		return self.initiative[0] == self.player_id - 1
 
 	def mech_has_initiative(self, mech):
 		"""

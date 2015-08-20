@@ -7,6 +7,13 @@ class Game:
 		self.phase = phase
 		print("* Id de jugador actual: {0}, fase actual: {1}". format(self.player_id, self.phase))
 
+		# Determinar la iniciativa
+		self.initiative = Initiative.parsefile(player_id)
+		if self.initiative.player_has_initiative():
+			print("* El jugador {0} tiene la iniciativa. Orden de iniciativa: {1}". format(self.player_id, self.initiative))
+		else:
+			print("* El jugador {0} no tiene la iniciativa. Orden de iniciativa: {1}". format(self.player_id, self.initiative))
+
 		# cargar el mapa
 		self.map = GameMap.parsefile(player_id=player_id)
 		#print(self.map)
