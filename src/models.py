@@ -524,8 +524,8 @@ class GameMap:
 	def rotation_cost(cls, source_rotation, target_rotation):
 		"""
 		Calcula el coste para realizar un giro.
-		:param source: (int) rotación inicial
-		:param target: (int) rotación final
+		:param source_rotation: (int) rotación inicial
+		:param target_rotation: (int) rotación final
 		:return: (int) coste para efectuar el giro
 		"""
 
@@ -845,7 +845,7 @@ class Initiative:
 
 		data = {
 			'num_players': num_players,
-			'initiative': [readint(f) for i in range(num_players)]
+			'initiative': [readint(f) for _ in range(num_players)]
 		}
 
 		f.close()
