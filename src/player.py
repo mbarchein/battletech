@@ -1,4 +1,3 @@
-import sys
 from models import *
 
 class Game:
@@ -21,9 +20,9 @@ class Game:
 		# Parsear fichero con información de mechs
 		self.mechs = Mech.parsefile(player_id)
 
-		# Mechs jugador y enemigo
-		self.player_mech = self.mechs[player_id]
-		self.enemy_mech = self.mechs[player_id+1 % 2]
+		# Mechs jugador y enemigos
+		self.player  = self.mechs[player_id]
+		self.enemies = [mech for mech in self.mechs if mech.id!=player_id]
 
 		# actualizar hextiles de los mechs con referencias a los objetos Hextile
 		for mech in self.mechs:
@@ -34,8 +33,6 @@ class Game:
 		Realiza la acción adecuada para la fase actual
 		:return:
 		"""
-		source = MechPosition(self.player_mech.heading, self.player_mech.hextile)
-		target  = MechPosition(self.enemy_mech.heading, self.enemy_mech.hextile)
 
 		# Acciones que se van a grabar en el fichero de salida
 		action = []
@@ -51,7 +48,7 @@ class Game:
 		if self.phase == "FinalTurno":
 			pass
 
-		# Grabar acciones
+		# Grabar acciones a realizar en fichero
 		filename = self.save_action(action)
 		print("* Almacenado fichero de acción {0}".format(filename))
 
@@ -61,8 +58,8 @@ class Game:
 		Ejecuta la fase de movimiento
 		:return: None
 		"""
-		player_position = MechPosition(self.player_mech.heading, self.player_mech.hextile)
-		enemy_position  = MechPosition(self.enemy_mech.heading, self.enemy_mech.hextile)
+		player_position = MechPosition(self.player.heading, self.player.hextile)
+		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
 
 		print("* Mech jugador en {0}".format(player_position))
 		print("* Mech enemigo en {0}".format(enemy_position))
@@ -99,9 +96,9 @@ class Game:
 		# calcular movimientos máximos dentro del camino averiguado que se pueden realizar con los puntos de movimiento
 		# actuales
 		movement_points = {
-			'walk': self.player_mech.movement_walk,
-			'run' : self.player_mech.movement_run,
-			'jump': self.player_mech.movement_jump
+			'walk': self.player.movement_walk,
+			'run' : self.player.movement_run,
+			'jump': self.player.movement_jump
 		}
 
 		print("* Puntos de movimiento: Andar {walk}, Correr {run}, Saltar {jump}".format(**movement_points))
