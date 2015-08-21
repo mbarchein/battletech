@@ -2,7 +2,7 @@ import networkx
 import os
 import sys
 import subprocess
-from util import readstr, readint, readbool
+from util import readstr, readint, readbool, memoize
 
 
 class Mech:
@@ -318,7 +318,6 @@ class GameMap:
 		:param movement_type: (str) "walk" o "run"
 		:return: (set) conjunto de MechPositions
 		"""
-
 		G = self.movement_graph[movement_type]
 		targets_paths = networkx.single_source_shortest_path(G, source, movement_points)
 		s = set()
@@ -327,6 +326,19 @@ class GameMap:
 				s.add(item)
 
 		return s
+
+	def paths_to_set(self, source, targets, movement_type):
+		"""
+		Computa todas las distancias desde source a cada uno de los targets y devuelve una lista ordenada según longitud
+		de los caminos, con el más corto primero.
+		:param source: (MechPosition) posición de inicio
+		:param targets: (set) conjunto de MechPositions a analizar
+		:param movement_type: (str) tipo de movimiento ("walk" o "run")
+		:return: (list)  lista de MovementPath ordenada, con caminos más cortos primero
+		"""
+		paths = [self.best_path(source, target, movement_type) for target in targets]
+		paths.sort()
+		return paths
 
 
 	def nearest_path_to_set(self, source, targets, movement_type):
@@ -338,15 +350,8 @@ class GameMap:
 		:param movement_type: (str) tipo de movimiento ("walk" o "run")
 		:return:
 		"""
-		best_path = None
-
-		for target in targets:
-			path = self.best_path(source, target, movement_type)
-			if path:
-				if best_path is None or (path.cost < best_path.cost):
-					best_path = path
-
-		return best_path
+		paths = self.paths_to_set(source, targets, movement_type)
+		return paths[0]
 
 
 	@classmethod
@@ -707,6 +712,10 @@ class MovementPath:
 		# Tipo de movimiento asociado ("walk" o "run")
 		self.movement_type = movement_type
 
+		# posiciones de inicio y fin
+		self.source = self.path[0]
+		self.target = self.path[-1]
+
 		# Coste del movimiento a través de 'path'
 		self.cost = None
 
@@ -716,6 +725,15 @@ class MovementPath:
 			edge = self.map.get_edge_data(self.graph, path[i], path[i+1])
 			accum += edge['weight']
 		self.cost = accum
+
+	def __lt__(self, other):
+		return self.cost < other.cost
+
+	def __le__(self, other):
+		return self.cost <= other.cost
+
+	def __eq__(self, other):
+		return self.cost == other.cost
 
 
 	def longest_movement(self, movement_points):
@@ -775,8 +793,8 @@ class LineOfSightAndCover:
 		self.has_line_of_sight = has_line_of_sight
 		self.has_partial_cover = has_partial_cover
 
-	@staticmethod
-	def calculate(player_id, gamemap, source, source_level_sum, target, target_level_sum, debug=False):
+	@classmethod
+	def calculate(cls, player_id, gamemap, source, source_level_sum, target, target_level_sum, debug=False):
 		"""
 		Obtiene el cálculo de la línea de visión y cobertura
 		:param player_id: (int)  identificador del jugador
@@ -786,11 +804,8 @@ class LineOfSightAndCover:
 		:param target:           (Hextile)|(MechPosition)|(str) casilla de destino
 		:param target_level_sum: (bool) True para sumar 1 a la elevación de destino
 		:param debug:            (bool) True para mostrar información de depuración
-		:return:
+		:return: (LineOfSoightAndCover)
 		"""
-		executable_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "resources", "bin-win32"))
-		executable_file = os.path.join(executable_dir, "LDVyC.exe")
-
 		# Permitir diferentes tipos de dato para source y target
 		if type(source) == Hextile:
 			source = source.name
@@ -801,6 +816,26 @@ class LineOfSightAndCover:
 			target = target.name
 		if type(target) == MechPosition:
 			target = target.hextile.name
+
+		return cls.calculate_real(player_id, gamemap, source, source_level_sum, target, target_level_sum, debug)
+
+
+	@classmethod
+	@memoize
+	def calculate_real(cls, player_id, gamemap, source, source_level_sum, target, target_level_sum, debug=False):
+		"""
+		Obtiene el cálculo de la línea de visión y cobertura
+		:param player_id: (int)  identificador del jugador
+		:param gamemap:          (GameMap) mapa de juego asociado
+		:param source:           (str) casilla de origen
+		:param source_level_sum: (bool) True para sumar 1 a la elevación de origen
+		:param target:           (str) casilla de destino
+		:param target_level_sum: (bool) True para sumar 1 a la elevación de destino
+		:param debug:            (bool) True para mostrar información de depuración
+		:return: LineOfSightAndCover
+		"""
+		executable_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "resources", "bin-win32"))
+		executable_file = os.path.join(executable_dir, "LDVyC.exe")
 
 		cmd = [
 			executable_file,

@@ -64,6 +64,15 @@ class Game:
 		print("* Mech jugador en {0}".format(player_position))
 		print("* Mech enemigo en {0}".format(enemy_position))
 
+		movement_points = {
+			'walk': self.player.movement_walk,
+			'run' : self.player.movement_run,
+			'jump': self.player.movement_jump
+		}
+
+		print("* Puntos de movimiento: Andar {walk}, Correr {run}, Saltar {jump}".format(**movement_points))
+
+
 		# print(self.map.map_byname["2303"].get_extended_info())
 		# self.map.best_path(MechPosition(3,self.map.map_byname["2205"]), MechPosition(1,self.map.map_byname["2202"]), "walk", debug=True)
 		# edges = self.map.movement_graph['walk'].edges()
@@ -77,53 +86,43 @@ class Game:
 		# su radio de movimiento
 		estimated_enemy_movement_points = 4
 		estimated_enemy_farthest_movement_tiles = self.map.farthest_movemnts_possible(enemy_position, estimated_enemy_movement_points, "walk")
-		print("* El enemigo podría desplazarse a cualquiera de estas {0} posiciones".format(len(estimated_enemy_farthest_movement_tiles)))
+		print("* El enemigo podría desplazarse a cualquiera de estas {0} posiciones con {1} puntos de movimiento".format(len(estimated_enemy_farthest_movement_tiles), estimated_enemy_movement_points))
 		print(estimated_enemy_farthest_movement_tiles)
 
-		# Buscar el que queda más cerca de todos con respecto a la posción del jugador en términos de movimiento
-		path = self.map.nearest_path_to_set(player_position, estimated_enemy_farthest_movement_tiles, "walk")
-		print ("* Camino más corto a la nube de posibles posiciones del enemigo:")
-		print (path)
+		# Buscar los que quedan más cerca de la nube de destinos del enemigo con respecto a la posción del jugador en
+		# términos de coste de movimiento
+		estimated_enemy_paths = self.map.paths_to_set(player_position, estimated_enemy_farthest_movement_tiles, "walk")
 
-		# Buscar hextiles "interesantes" para movimiento
-		candidate_targets = self.map.hextiles_in_max_radius(enemy_position.hextile, 3)
+		# Determinar cual es el más cercano de la nube de destinos que tiene línea de visión, tras recorrer alguna distancia
+		# a través de dicho camino
+		for candidate_path in estimated_enemy_paths:
+			# Se busca el primero de los caminos más cortos que al ser recorrido lo que permitan los puntos de movimiento
+			# deja al jugador colocado en línea de visión con el enemigo
+			path = candidate_path.longest_movement(movement_points['walk'])
+			line_sc = LineOfSightAndCover.calculate(self.player_id, self.map, path.target, True, candidate_path.target, True)
+			if line_sc.has_line_of_sight:
+				break
+		else:
+			candidate_path = None
+			line_sc = None
+			path = None
 
-		print(candidate_targets)
-		lines_sc = [LineOfSightAndCover.calculate(self.player_id, self.map, c, True, enemy_position, True) for c in candidate_targets]
-		for line_sc in lines_sc:
+		if line_sc:
+			# Hay un camino nos permite linea de visión
+			print ("* Camino más corto con línea de visión a la nube de posibles posiciones del enemigo:")
+			print(candidate_path)
+			print ("* Posición del jugador tras desplazarse por dicho camino:")
+			print(path)
+			print ("* Línea de visión estimada:")
 			print(line_sc)
+		else:
+			# Recorrer camino más corto para acercarnos al enemigo, sin línea de visión
+			path = estimated_enemy_paths[0]
+			print ("* No hay ningún camino con línea de visión a la nube de posibles posiciones del enemigo")
+			raise NotImplemented("No hay ningún camino con línea de visión a la nube de posibles posiciones del enemigo")
 
-		source = player_position
-		target = enemy_position
 
-		# Calcular posibles rutas al objetivo según diferentes métodos de movimiento y destinos
-		possible_paths = []
-
-		# "Andar"
-		path = self.map.best_path(source, target, "walk", debug=True)
-		if path:
-			possible_paths.append(path)
-
-		# "Correr"
-		path = self.map.best_path(source, target, "run", debug=True)
-		if path:
-			possible_paths.append(path)
-
-		# calcular movimientos máximos dentro del camino averiguado que se pueden realizar con los puntos de movimiento
-		# actuales
-		movement_points = {
-			'walk': self.player.movement_walk,
-			'run' : self.player.movement_run,
-			'jump': self.player.movement_jump
-		}
-
-		print("* Puntos de movimiento: Andar {walk}, Correr {run}, Saltar {jump}".format(**movement_points))
-
-		# Determinar mejor tipo de movimiento
-		best_path = possible_paths[0]
-
-		# Calcular máximo movimiento posible mediante la acción "Andar"
-		action_path = best_path.longest_movement(movement_points['walk'])
+		action_path = path
 		#print(action_path)
 
 		# Generar y devolver acciones
