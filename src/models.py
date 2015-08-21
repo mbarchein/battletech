@@ -188,7 +188,7 @@ class GameMap:
 				# Si no se obtiene distancia, es que se trata de un camino imposible de seguir y en ese caso no se añade
 				# al grafo de movimientos válidos
 				if weight:
-					G.add_edge(u.tuple(), v.tuple(), weight=weight, action="Adelante")
+					G.add_edge(u, v, weight=weight, action="Adelante")
 
 				# rotación correspondiente a ir "hacia atrás" con respecto al source
 				backward_rot = ((rotation + 2) % 6) + 1
@@ -199,7 +199,7 @@ class GameMap:
 					v = MechPosition(rotation, backward_neighbor)
 					weight = self.movement_cost(u, v, restrictions=["backward"])
 					if weight:
-						G.add_edge(u.tuple(), v.tuple(), weight=weight, action="Atras")
+						G.add_edge(u, v, weight=weight, action="Atras")
 
 		return G
 		#for edge in G.edges(): print("({0},{1})".format(*edge))
@@ -233,7 +233,7 @@ class GameMap:
 				# Si no se obtiene distancia, es que se trata de un camino imposible de seguir y en ese caso no se añade
 				# al grafo de movimientos válidos
 				if weight:
-					G.add_edge(u.tuple(), v.tuple(), weight=weight, action="Adelante")
+					G.add_edge(u, v, weight=weight, action="Adelante")
 
 		return G
 		#for edge in G.edges(): print("({0},{1})".format(*edge))
@@ -254,14 +254,14 @@ class GameMap:
 			for i in range(1,6):
 				u = MechPosition(i, hextile)
 				v = MechPosition(i+1, hextile)
-				G.add_edge(u.tuple(), v.tuple(), weight=self.movement_cost(u, v), action="Derecha")
-				G.add_edge(v.tuple(), u.tuple(), weight=self.movement_cost(v, u), action="Izquierda")
+				G.add_edge(u, v, weight=self.movement_cost(u, v), action="Derecha")
+				G.add_edge(v, u, weight=self.movement_cost(v, u), action="Izquierda")
 
 			# giro de 6 <--> 1
 			u = MechPosition(6, hextile)
 			v = MechPosition(1, hextile)
-			G.add_edge(u.tuple(), v.tuple(), weight=self.movement_cost(u, v), action="Derecha")
-			G.add_edge(v.tuple(), u.tuple(), weight=self.movement_cost(v, u), action="Izquierda")
+			G.add_edge(u, v, weight=self.movement_cost(u, v), action="Derecha")
+			G.add_edge(v, u, weight=self.movement_cost(v, u), action="Izquierda")
 
 
 	def __str__(self):
@@ -272,28 +272,27 @@ class GameMap:
 
 		return "\n".join(out)
 
-	def best_path(self, movement_type, source, target, debug=False):
+	def best_path(self, source, target, movement_type, debug=False):
 		"""
 		Obtiene el mejor camino entre dos puntos del grafo de movimientos para el tipo de movimiento indicado. Utiliza
 		el algoritmo A* para examinar los grafos de movimientos permitidos
-		:param movement_type: (str) tipo de movimiento. Puede ser "walk" o "run"
 		:param source: (MechPosition) posición de inicio
 		:param target: (MechPosition) posición destino
+		:param movement_type: (str) tipo de movimiento. Puede ser "walk" o "run"
 		:param debug: (bool) si es True, se muestra información de depuración por la salida estándar
 		:return: (MovementPath) Ruta entre source y target
 		"""
 		action = "Andar" if movement_type=="walk" else "Correr"
 
 		try:
-			astar_path = networkx.astar_path(self.movement_graph[movement_type], source.tuple(), target.tuple())
-			astar_path_mechposition = [MechPosition(*x) for x in  astar_path]
-			path = MovementPath(self, astar_path_mechposition, movement_type)
+			astar_path = networkx.astar_path(self.movement_graph[movement_type], source, target)
+			path = MovementPath(self, astar_path, movement_type)
 			if debug:
-				print ("* Camino hasta objetivo {1} mediante \"{0}\"".format(action, target))
+				print ("* Camino {0} --> {1} mediante \"{2}\"".format(source, target, action))
 				print(path)
 		except networkx.NetworkXNoPath:
 			if debug:
-				print ("* No hay camino hasta objetivo {1} mediante \"{0}\"".format(action, target))
+				print ("* No hay camino {0} --> {1} mediante \"{2}\"".format(source, target, action))
 			path = None
 
 		return path
@@ -312,19 +311,43 @@ class GameMap:
 
 	def farthest_movemnts_possible(self, source, movement_points, movement_type):
 		"""
-		Devuelve una lista de los todos los hextiles a los que se puede llegar desde el origen invirtiendo como máximo
+		Devuelve una lista de los todos los hextiles a los que se puede llegar desde el origen gastando como máximo
 		el número de puntos de movimiento indicados y realizando el tipo de movimiento 'movement_type'
 		:param source: (MechPosition) posición de inicio
 		:param movement_points: (int) número máximo de puntos de movimiento que se van a invertir
 		:param movement_type: (str) "walk" o "run"
-		:return: (list) lista de Hextiles
+		:return: (set) conjunto de MechPositions
 		"""
 
 		G = self.movement_graph[movement_type]
-		targets_paths = networkx.single_source_shortest_path(G, source.tuple(), movement_points)
-		targets = targets_paths.keys()
-		print(targets)
-		return targets
+		targets_paths = networkx.single_source_shortest_path(G, source, movement_points)
+		s = set()
+		for _,path in targets_paths.items():
+			for item in path:
+				s.add(item)
+
+		return s
+
+
+	def nearest_path_to_set(self, source, targets, movement_type):
+		"""
+		Computa la distancia mínima desde source a cada uno de los targets y devuelve el MovementPath al target más
+		cercano
+		:param source: (MechPosition) posición de inicio
+		:param targets: (set) conjunto de MechPositions a analizar
+		:param movement_type: (str) tipo de movimiento ("walk" o "run")
+		:return:
+		"""
+		best_path = None
+
+		for target in targets:
+			path = self.best_path(source, target, movement_type)
+			if path:
+				if best_path is None or (path.cost < best_path.cost):
+					best_path = path
+
+		return best_path
+
 
 	@classmethod
 	def parsefile(cls, player_id):
@@ -439,19 +462,19 @@ class GameMap:
 		:param source: (MechPosition) origen
 		:param target: (MechPosition) destino
 		:param restrictions: Lista de restricciones (str) a tener en cuenta a la hora de computar costes. Se reconocen
-		                     las siguientes restricciones:
-		                         "backward" --> El mech está caminando hacia atrás
-		                         "running"  --> El mech está corriendo
+							 las siguientes restricciones:
+								 "backward" --> El mech está caminando hacia atrás
+								 "running"  --> El mech está corriendo
 		:return: int coste del movimiento o None si el movimiento no se posible
 		"""
 		if not restrictions:
 			restrictions = []
 
-		# Coste de rotación
-		cost = cls.rotation_cost(source.rotation, target.rotation)
-
 		# Se cambiará a True si no es posible realizar el movimiento
 		impossible = False
+
+		# Coste de rotación
+		cost = cls.rotation_cost(source.rotation, target.rotation)
 
 		# El coste de no cambiar de Hextile es 0, por lo que se finaliza el cálculo
 		if source.hextile == target.hextile:
@@ -476,7 +499,7 @@ class GameMap:
 				cost += 4
 
 		# Pantanoso
-		if target.hextile.terrain_type == 4:
+		if target.hextile.terrain_type == 3:
 			cost += 2
 
 		################################
@@ -516,9 +539,9 @@ class GameMap:
 
 		## Resultado
 		if impossible:
-			return None
-		else:
-			return cost
+			cost = None
+
+		return cost
 
 	@classmethod
 	def rotation_cost(cls, source_rotation, target_rotation):
@@ -546,10 +569,10 @@ class GameMap:
 		:return: diccionario con la información almacenada en el arco (a,b)
 		"""
 		if type(a) == MechPosition:
-			a = a.tuple()
+			a = a
 
 		if type(b) == MechPosition:
-			b = b.tuple()
+			b = b
 
 		return graph.get_edge_data(a,b)
 
@@ -599,7 +622,7 @@ class Hextile:
 		return "<{0}>".format(self.name)
 
 	def get_extended_info(self):
-		out = self.name + " | "
+		out = "Hextile <" + self.name + "> | "
 		has_neighbors = False
 		for k in self.neighbors:
 			if self.neighbors[k]:
@@ -651,8 +674,14 @@ class MechPosition:
 	def __str__(self):
 		return "({0},{1})".format(self.rotation, self.hextile)
 
+	def __repr__(self):
+		return self.__str__()
+
 	def __eq__(self, other):
 		return self.__dict__ == other.__dict__
+
+	def __hash__(self):
+		return int(str(self.rotation) + self.hextile.name)
 
 	def tuple(self):
 		"""
@@ -721,7 +750,7 @@ class MovementPath:
 		path = self.path
 		graph = self.graph
 
-		out = ["posición de inicio| {0}".format(path[0])]
+		out = ["Recorrido con posición de inicio {0} y posición final {1}".format(path[0], path[-1])]
 		accum = 0
 
 		for i in range(0, len(path)-1):

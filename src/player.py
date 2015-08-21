@@ -64,14 +64,30 @@ class Game:
 		print("* Mech jugador en {0}".format(player_position))
 		print("* Mech enemigo en {0}".format(enemy_position))
 
+		# print(self.map.map_byname["2303"].get_extended_info())
+		# self.map.best_path(MechPosition(3,self.map.map_byname["2205"]), MechPosition(1,self.map.map_byname["2202"]), "walk", debug=True)
+		# edges = self.map.movement_graph['walk'].edges()
+		# for a,b in edges:
+		# 	if a.hextile.name=="2202" or b.hextile.name=="2202":
+		# 		print((a,b))
+		# sys.exit()
+
 		# Determinar cuales son las distancias máximas a las que puede llegar el mech enemigo en su fase de movimiento
 		# Como no podemos saber los puntos de moniviento que tiene el mech enemigo, asumiremos un valor fijo para estimar
 		# su radio de movimiento
 		estimated_enemy_movement_points = 4
 		estimated_enemy_farthest_movement_tiles = self.map.farthest_movemnts_possible(enemy_position, estimated_enemy_movement_points, "walk")
+		print("* El enemigo podría desplazarse a cualquiera de estas {0} posiciones".format(len(estimated_enemy_farthest_movement_tiles)))
+		print(estimated_enemy_farthest_movement_tiles)
+
+		# Buscar el que queda más cerca de todos con respecto a la posción del jugador en términos de movimiento
+		path = self.map.nearest_path_to_set(player_position, estimated_enemy_farthest_movement_tiles, "walk")
+		print ("* Camino más corto a la nube de posibles posiciones del enemigo:")
+		print (path)
 
 		# Buscar hextiles "interesantes" para movimiento
 		candidate_targets = self.map.hextiles_in_max_radius(enemy_position.hextile, 3)
+
 		print(candidate_targets)
 		lines_sc = [LineOfSightAndCover.calculate(self.player_id, self.map, c, True, enemy_position, True) for c in candidate_targets]
 		for line_sc in lines_sc:
@@ -84,12 +100,12 @@ class Game:
 		possible_paths = []
 
 		# "Andar"
-		path = self.map.best_path("walk", source, target, debug=True)
+		path = self.map.best_path(source, target, "walk", debug=True)
 		if path:
 			possible_paths.append(path)
 
 		# "Correr"
-		path = self.map.best_path("run", source, target, debug=True)
+		path = self.map.best_path(source, target, "run", debug=True)
 		if path:
 			possible_paths.append(path)
 
