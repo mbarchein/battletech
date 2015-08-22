@@ -144,10 +144,18 @@ class GameMap:
 		self.movement_graph['run'] = self._run_map()
 		self.adjacency_graph = self._hextile_adjacency_graph()
 
+	def __str__(self):
+		out = []
+		for q in self.map:
+			for r in self.map[q]:
+				out.append(self.map[q][r].get_extended_info())
+
+		return "\n".join(out)
+
 	def _hextile_adjacency_graph(self):
 		"""
-		Genera un grago de adyacencias entre Hextiles, se usa para calcular radios y casillas "interesantes" para
-		movimientos. Los nodos del grafo son los nombres de los Hextiles
+		Genera un grafo de adyacencias entre Hextiles, se usa para calcular radios y casillas "interesantes" para
+		movimientos, así como rotaciones óptimas. Los nodos del grafo son los nombres de los Hextiles
 		:return: (Graph) Grafo no dirigido de adyacencias entre Hextiles
 		"""
 		G = networkx.Graph()
@@ -155,13 +163,14 @@ class GameMap:
 			for neighbor in hextile.neighbors.values():
 				# Añadir arco entre nodos. Para este grafo, cada nodo estará separado de cualquiera de sus vecinos por
 				# una distancia de 1
-				G.add_edge(hextile.name, neighbor.name)
+				G.add_edge(hextile, neighbor)
 
 		return G
 
-	def _walk_map(self):
+	def _walk_map(self, allow_backward=False):
 		"""
 		Computa el grafo de caminos posibles que se pueden recorrer con el tipo de movimiento "Andar"
+		:type allow_backward: bool  indica si se añaden al grafo de movimientos aquellos que son hacia "Atras"
 		:return: (DiGraph) Grafo dirigido con caminos posibles y costes. Los nodos son de tipo MechPosition
 		"""
 
@@ -190,16 +199,17 @@ class GameMap:
 				if weight:
 					G.add_edge(u, v, weight=weight, action="Adelante")
 
-				# rotación correspondiente a ir "hacia atrás" con respecto al source
-				backward_rot = ((rotation + 2) % 6) + 1
+				if allow_backward:
+					# rotación correspondiente a ir "hacia atrás" con respecto al source
+					backward_rot = ((rotation + 2) % 6) + 1
 
-				# Vecino en dirección "Atras"
-				if backward_rot in hextile.neighbors:
-					backward_neighbor = hextile.neighbors[backward_rot]
-					v = MechPosition(rotation, backward_neighbor)
-					weight = self.movement_cost(u, v, restrictions=["backward"])
-					if weight:
-						G.add_edge(u, v, weight=weight, action="Atras")
+					# Vecino en dirección "Atras"
+					if backward_rot in hextile.neighbors:
+						backward_neighbor = hextile.neighbors[backward_rot]
+						v = MechPosition(rotation, backward_neighbor)
+						weight = self.movement_cost(u, v, restrictions=["backward"])
+						if weight:
+							G.add_edge(u, v, weight=weight, action="Atras")
 
 		return G
 		#for edge in G.edges(): print("({0},{1})".format(*edge))
@@ -264,13 +274,34 @@ class GameMap:
 			G.add_edge(v, u, weight=self.movement_cost(v, u), action="Izquierda")
 
 
-	def __str__(self):
-		out = []
-		for q in self.map:
-			for r in self.map[q]:
-				out.append(self.map[q][r].get_extended_info())
+	def facing_heading(self, source, target):
+		"""
+		Devuelve la rotación adecuada para que mirando desde el Hextile "source", el mech apunte de cara al Hextile
+		"target"
+		:param source: (Hextile) origen
+		:param target: (Hextile) destino al que hay que apuntar
+		:return: (int) dirección de encaramiento computada
+		"""
 
-		return "\n".join(out)
+		# origen y destino no pueden ser iguales, ya que la solución carece de sentido en este caso
+		if source == target:
+			raise ValueError("Los hextiles origen y destino coinciden: {0} {1}".format(source, target))
+
+		# Se calcula la ruta mínima teniendo en cuenta únicamente la topología de los Hextiles (sin restricciones al
+		# movimiento) y se comprueba en qué encaramiento aparece la segunda componente del camino generado (la que
+		# sucede al Hextile "source". Este encaramiento es el que necesitamos
+		G = self.adjacency_graph
+		path = networkx.astar_path(G, source, target)
+
+		# Este es el Hextile que indica la dirección
+		heading_neightbor = path[1]
+
+		for rotation, neighbor in source.neighbors.items():
+			if heading_neightbor == neighbor:
+				return rotation
+		else:
+			raise ValueError("No se ha encontrado el Hextile {0} entre los vecinos de {1}", heading_neightbor, source)
+
 
 	def best_path(self, source, target, movement_type, debug=False):
 		"""
@@ -649,7 +680,7 @@ class Hextile:
 		return out
 
 	def __hash__(self):
-		return hash(self.name)
+		return int(self.name)
 
 	def __lt__(self, other):
 		return True
@@ -688,11 +719,40 @@ class MechPosition:
 	def __hash__(self):
 		return int(str(self.rotation) + self.hextile.name)
 
-	def tuple(self):
+	@staticmethod
+	def facing_heading(source,target):
 		"""
-		Devuelve una representación en forma de tupla de la instancia
+		Devuelve la rotación adecuada para que mirando desde el Hextile "source", el mech apunte de cara al Hextile
+		"target"
+		:param source: Hextile origen
+		:param target: Hextile destino al que hay que apuntar
 		"""
-		return self.rotation, self.hextile
+
+		v_distance = target.row - source.row
+		h_distance = target.col - source.col
+
+		# source y target en la misma columna
+		if h_distance == 0:
+			if v_distance > 0:
+				return 1
+			else:
+				return 4
+
+		# source y target en la misma fila
+		if v_distance == 0:
+			if h_distance > 0:
+				if target.col % 2 == 0:
+					return 3
+				else:
+					return 2
+			else:
+				if target.col % 2 == 0:
+					return 5
+				else:
+					return 6
+
+
+		raise NotImplemented()
 
 
 class MovementPath:
@@ -741,24 +801,27 @@ class MovementPath:
 		"""
 		Obtiene la ruta más larga que se puede recorrer con unos determinados puntos de movimiento, dado un camino y
 		un tipo de movimiento
-		:param movement_points: puntos de movimiento que se van a utilizar como máximo
-		:return: (MovementPath)  Camino que hay que seguir
+		:param movement_points: (int) Puntos de movimiento que se van a utilizar como máximo
+		:return: (MovementPath) Camino que hay que seguir
 		"""
-		path = self.path
+		original_path = self.path
 		movement_type = self.movement_type
 
 		accum = 0
 		i = 0
+		costs = []
 
-		while i < len(path)-1:
-			cost = self.map.get_simple_movement_cost(self.map.movement_graph[movement_type], path[i], path[i+1])
+		while i < len(original_path)-1:
+			cost = self.map.get_simple_movement_cost(self.map.movement_graph[movement_type], original_path[i], original_path[i+1])
+			costs.append(cost)
 			accum += cost
 			if accum > movement_points:
 				break
 			i += 1
 
-		subpath = path[:i+1]
-		return MovementPath(self.map, subpath, self.movement_type)
+		subpath = original_path[:i+1]
+		movement = MovementPath(self.map, subpath, self.movement_type)
+		return movement
 
 	def __str__(self):
 		"""

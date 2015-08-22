@@ -97,7 +97,8 @@ class Game:
 		# a través de dicho camino
 		for candidate_path in estimated_enemy_paths:
 			# Se busca el primero de los caminos más cortos que al ser recorrido lo que permitan los puntos de movimiento
-			# deja al jugador colocado en línea de visión con el enemigo
+			# deja al jugador colocado en línea de visión con el enemigo. Nos aseguramos de que el mech se quede "mirando"
+			# hacia la casilla del enemigo para poder tener mejores posibilidades de ataque
 			path = candidate_path.longest_movement(movement_points['walk'])
 			line_sc = LineOfSightAndCover.calculate(self.player_id, self.map, path.target, True, candidate_path.target, True)
 			if line_sc.has_line_of_sight:
