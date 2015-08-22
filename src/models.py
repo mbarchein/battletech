@@ -274,35 +274,6 @@ class GameMap:
 			G.add_edge(v, u, weight=self.movement_cost(v, u), action="Izquierda")
 
 
-	def facing_heading(self, source, target):
-		"""
-		Devuelve la rotación adecuada para que mirando desde el Hextile "source", el mech apunte de cara al Hextile
-		"target"
-		:param source: (Hextile) origen
-		:param target: (Hextile) destino al que hay que apuntar
-		:return: (int) dirección de encaramiento computada
-		"""
-
-		# origen y destino no pueden ser iguales, ya que la solución carece de sentido en este caso
-		if source == target:
-			raise ValueError("Los hextiles origen y destino coinciden: {0} {1}".format(source, target))
-
-		# Se calcula la ruta mínima teniendo en cuenta únicamente la topología de los Hextiles (sin restricciones al
-		# movimiento) y se comprueba en qué encaramiento aparece la segunda componente del camino generado (la que
-		# sucede al Hextile "source". Este encaramiento es el que necesitamos
-		G = self.adjacency_graph
-		path = networkx.astar_path(G, source, target)
-
-		# Este es el Hextile que indica la dirección
-		heading_neightbor = path[1]
-
-		for rotation, neighbor in source.neighbors.items():
-			if heading_neightbor == neighbor:
-				return rotation
-		else:
-			raise ValueError("No se ha encontrado el Hextile {0} entre los vecinos de {1}", heading_neightbor, source)
-
-
 	def best_path(self, source, target, movement_type, debug=False):
 		"""
 		Obtiene el mejor camino entre dos puntos del grafo de movimientos para el tipo de movimiento indicado. Utiliza
@@ -397,12 +368,12 @@ class GameMap:
 		height = readint(f)
 		width = readint(f)
 		print("* Tamaño del mapa: {0} x {1} hexágonos (ancho x alto)".format(width, height))
-		gamemap = {}
+		mapinfo = {}
 
 		# inicializar hexágonos con datos del fichero
 		for col in range(0, width):
 			q = col+1
-			gamemap[q] = {}
+			mapinfo[q] = {}
 			for row in range(0, height):
 				r = row+1
 				hextile = Hextile(
@@ -434,7 +405,7 @@ class GameMap:
 					                     },
 				)
 
-				gamemap[hextile.col][hextile.row] = hextile
+				mapinfo[hextile.col][hextile.row] = hextile
 
 		# calcular vecinos
 		for col in range(0, width):
@@ -444,34 +415,40 @@ class GameMap:
 
 				# El cálculo es diferente dependiendo de si la columna es par o impar
 				if col % 2 == 1:
-					gamemap[q][r].neighbors = {
-						1: gamemap[q  ][r-1] if r>1 else None,
-						2: gamemap[q+1][r  ] if q<width and r>1 else None,
-						3: gamemap[q+1][r+1] if q<width and r<height else None,
-						4: gamemap[q  ][r+1] if r<height else None,
-						5: gamemap[q-1][r+1] if q>1 and r<height else None,
-						6: gamemap[q-1][r  ] if q>1 and r>1 else None
+					mapinfo[q][r].neighbors = {
+						1: mapinfo[q  ][r-1] if r>1 else None,
+						2: mapinfo[q+1][r  ] if q<width and r>1 else None,
+						3: mapinfo[q+1][r+1] if q<width and r<height else None,
+						4: mapinfo[q  ][r+1] if r<height else None,
+						5: mapinfo[q-1][r+1] if q>1 and r<height else None,
+						6: mapinfo[q-1][r  ] if q>1 and r>1 else None
 					}
 				else:
-					gamemap[q][r].neighbors = {
-						1: gamemap[q  ][r-1] if r>1 else None,
-						2: gamemap[q+1][r-1] if q<width and r>1 else None,
-						3: gamemap[q+1][r  ] if q<width else None,
-						4: gamemap[q  ][r+1] if r<height else None,
-						5: gamemap[q-1][r  ] if q>1 else None,
-						6: gamemap[q-1][r-1] if q>1 and r>1 else None
+					mapinfo[q][r].neighbors = {
+						1: mapinfo[q  ][r-1] if r>1 else None,
+						2: mapinfo[q+1][r-1] if q<width and r>1 else None,
+						3: mapinfo[q+1][r  ] if q<width else None,
+						4: mapinfo[q  ][r+1] if r<height else None,
+						5: mapinfo[q-1][r  ] if q>1 else None,
+						6: mapinfo[q-1][r-1] if q>1 and r>1 else None
 					}
 
 				# Eliminar vecinos "nulos"
-				keys = list(gamemap[q][r].neighbors.keys())
+				keys = list(mapinfo[q][r].neighbors.keys())
 				for key in keys:
-					if gamemap[q][r].neighbors[key] is None:
-						gamemap[q][r].neighbors.pop(key, None)
+					if mapinfo[q][r].neighbors[key] is None:
+						mapinfo[q][r].neighbors.pop(key, None)
 
 		f.close()
 
 		# Construir y devolver instancia del mapa
-		return GameMap(mapdata=gamemap)
+		gamemap = GameMap(mapdata=mapinfo)
+
+		# Actualizar información de los hextiles para que tengan asociado el gamemap recién creado
+		for _,hextile in gamemap.map_byname.items():
+			hextile.map = gamemap
+
+		return gamemap
 
 
 	@classmethod
@@ -634,7 +611,7 @@ class Hextile:
 	}
 
 	def __init__(self, col, row, level, terrain_type, object_type, building_fce, collapsed_building, on_fire,
-			smoke, num_clubs, rivers, roads, neigbors=None):
+			smoke, num_clubs, rivers, roads, neigbors=None, gamemap=None):
 
 		if not neigbors:
 			neigbors = {}
@@ -652,7 +629,13 @@ class Hextile:
 		self.num_poles = num_clubs
 		self.rivers = rivers
 		self.roads = roads
+
+		# Vecinos de este Hextile. Será un diccionario con las posibles claves 1..6 y otro hextile como valor, sólo si
+		# el vecino existe en esa dirección. Si no existe, la clave no estará definida en el diccionario.
 		self.neighbors = neigbors
+
+		# Mapa que contiene este Hextile
+		self.map = gamemap
 
 	def __str__(self):
 		return "<{0}>".format(self.name)
@@ -754,6 +737,47 @@ class MechPosition:
 
 		raise NotImplemented()
 
+	def get_position_facing_to(self, target):
+		"""
+		Devuelve la MechPosition adecuada para que, mirando desde el este Hextile, el mech apunte de cara al Hextile
+		"target"
+		:param target: (Hextile) | (MechPosition) destino al que hay que apuntar
+		:return: (MechPosition) Posición del hextile actual con encaramiento modificado para que apunte hacia el
+		                        Hextile "target"
+		"""
+		source = self
+
+		# Se trabaja con los hextiles en este algoritmo
+		source = source.hextile
+		target = target.hextile
+
+		# origen y destino no pueden ser iguales, ya que la solución carece de sentido en este caso
+		if source == target:
+			raise ValueError("Los hextiles origen y destino coinciden: {0} {1}".format(source, target))
+
+		# origen y destino tienen que estar en el mismo mapa
+		if source.map != target.map:
+			raise ValueError("Los hextiles origen y destino deben pertenecer al mismo mapa de juego")
+
+		# Se calcula la ruta mínima teniendo en cuenta únicamente la topología de los Hextiles (sin restricciones al
+		# movimiento) y se comprueba en qué encaramiento aparece la segunda componente del camino generado (la que
+		# sucede al Hextile "source". Este encaramiento es el que necesitamos
+		G = source.map.adjacency_graph
+		path = networkx.astar_path(G, source, target)
+
+		# Este es el Hextile que indica la dirección correcta
+		heading_neighbor = path[1]
+
+		for rotation, neighbor in source.neighbors.items():
+			if heading_neighbor == neighbor:
+				desired_heading = rotation
+				break
+		else:
+			raise ValueError("No se ha encontrado el Hextile {0} entre los vecinos de {1}", heading_neighbor, source)
+
+		# Devolver MechPosition original con rotación modificada
+		return MechPosition(desired_heading, source)
+
 
 class MovementPath:
 	"""
@@ -775,6 +799,9 @@ class MovementPath:
 		# posiciones de inicio y fin
 		self.source = self.path[0]
 		self.target = self.path[-1]
+
+		# Longitud de la cadena de acciones
+		self.length = len(self.path) - 1
 
 		# Coste del movimiento a través de 'path'
 		self.cost = None

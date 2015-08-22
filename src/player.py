@@ -28,6 +28,10 @@ class Game:
 		for mech in self.mechs:
 			mech.hextile = self.map.map_byname[mech.hextile]
 
+		# Posiciones
+		self.player_position = MechPosition(self.player.heading, self.player.hextile)
+
+
 	def start(self):
 		"""
 		Realiza la acción adecuada para la fase actual
@@ -58,7 +62,7 @@ class Game:
 		Ejecuta la fase de movimiento
 		:return: None
 		"""
-		player_position = MechPosition(self.player.heading, self.player.hextile)
+		player_position = self.player_position
 		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
 
 		print("* Mech jugador en {0}".format(player_position))
@@ -81,17 +85,28 @@ class Game:
 		# 		print((a,b))
 		# sys.exit()
 
-		# Determinar cuales son las distancias máximas a las que puede llegar el mech enemigo en su fase de movimiento
+		# Determinar cuales son las posiciones máximas a las que puede llegar el mech enemigo en su fase de movimiento
 		# Como no podemos saber los puntos de moniviento que tiene el mech enemigo, asumiremos un valor fijo para estimar
 		# su radio de movimiento
 		estimated_enemy_movement_points = 4
-		estimated_enemy_farthest_movement_tiles = self.map.farthest_movemnts_possible(enemy_position, estimated_enemy_movement_points, "walk")
-		print("* El enemigo podría desplazarse a cualquiera de estas {0} posiciones con {1} puntos de movimiento".format(len(estimated_enemy_farthest_movement_tiles), estimated_enemy_movement_points))
-		print(estimated_enemy_farthest_movement_tiles)
+		estimated_enemy_farthest_movement_positions = self.map.farthest_movemnts_possible(enemy_position, estimated_enemy_movement_points, "walk")
+		print("* El enemigo podría desplazarse a cualquiera de estas {0} posiciones con {1} puntos de movimiento".format(len(estimated_enemy_farthest_movement_positions), estimated_enemy_movement_points))
+		print(estimated_enemy_farthest_movement_positions)
+
+		# Modificar cada una de las posiciones de la nube para que todas "encaren" a la posición actual del enemigo, ya
+		# que estas posiciones se utilizarán como posibles puntos de destino para el movimiento de nuestro jugador
+		estimated_enemy_farthest_movement_positions_heading_to_enemy = set()
+		for position in estimated_enemy_farthest_movement_positions:
+			# descartar aquellos destinos cuyo hextile coincide con la posición actual del enemigo
+			if position.hextile != enemy_position.hextile:
+				estimated_enemy_farthest_movement_positions_heading_to_enemy.add(position.get_position_facing_to(enemy_position))
+
+		print("* Posiciones destino candidatas con encaramiento hacia el enemigo: {0} ".format(len(estimated_enemy_farthest_movement_positions_heading_to_enemy)))
+		print(estimated_enemy_farthest_movement_positions_heading_to_enemy)
 
 		# Buscar los que quedan más cerca de la nube de destinos del enemigo con respecto a la posción del jugador en
 		# términos de coste de movimiento
-		estimated_enemy_paths = self.map.paths_to_set(player_position, estimated_enemy_farthest_movement_tiles, "walk")
+		estimated_enemy_paths = self.map.paths_to_set(player_position, estimated_enemy_farthest_movement_positions_heading_to_enemy, "walk")
 
 		# Determinar cual es el más cercano de la nube de destinos que tiene línea de visión, tras recorrer alguna distancia
 		# a través de dicho camino
@@ -112,23 +127,39 @@ class Game:
 			# Hay un camino nos permite linea de visión
 			print ("* Camino más corto con línea de visión a la nube de posibles posiciones del enemigo:")
 			print(candidate_path)
-			print ("* Posición del jugador tras desplazarse por dicho camino:")
+			print ("* Acciones del jugador para recorrer el camino:")
 			print(path)
 			print ("* Línea de visión estimada:")
 			print(line_sc)
 		else:
 			# Recorrer camino más corto para acercarnos al enemigo, sin línea de visión
-			path = estimated_enemy_paths[0]
-			print ("* No hay ningún camino con línea de visión a la nube de posibles posiciones del enemigo")
-			raise NotImplemented("No hay ningún camino con línea de visión a la nube de posibles posiciones del enemigo")
+			candidate_path = self.map.best_path(player_position, enemy_position, "walk")
+			path = candidate_path.longest_movement(movement_points['walk'])
+			print ("* No hay ningún camino con línea de visión a la nube de posibles posiciones del enemigo, se selecciona el más cercano a la posición enemiga")
 
-
+		# Movimiento a llevar a cabo en esta fase (MovementPath)
 		action_path = path
-		#print(action_path)
 
 		# Generar y devolver acciones
-		action = self.walk(action_path)
+		if action_path.length == 0:
+			action = self.immobile()
+		else:
+			action = self.walk(action_path)
 		return action
+
+	def immobile(self, debug=False):
+		"""
+		Genera los comandos permanecer inmóvil
+		:param debug: (boolean) Si es True se muestra información de depuración
+		:return: lista con cadenas con las órdenes de movimiento
+		"""
+		out = [
+			"Inmovil"
+		]
+
+		if debug: print ("movimiento: permanecer inmóvil en {0}".format(self.player_position))
+		print("* Generado comando \"Inmóvil\" para jugador {0}".format(self.player_id))
+		return  out
 
 	def walk(self, action_path, debug=False):
 		"""
