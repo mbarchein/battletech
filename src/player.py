@@ -101,7 +101,7 @@ class Game:
 			if position.hextile != enemy_position.hextile:
 				estimated_enemy_farthest_movement_positions_heading_to_enemy.add(position.get_position_facing_to(enemy_position))
 
-		print("* Posiciones destino candidatas con encaramiento hacia el enemigo: {0} ".format(len(estimated_enemy_farthest_movement_positions_heading_to_enemy)))
+		print("* Posiciones destino la nube de movimientos de el enemigo candidatas con encaramiento hacia enemigo: {0} ".format(len(estimated_enemy_farthest_movement_positions_heading_to_enemy)))
 		print(estimated_enemy_farthest_movement_positions_heading_to_enemy)
 
 		# Buscar los que quedan más cerca de la nube de destinos del enemigo con respecto a la posción del jugador en
@@ -136,6 +136,9 @@ class Game:
 			candidate_path = self.map.best_path(player_position, enemy_position, "walk")
 			path = candidate_path.longest_movement(movement_points['walk'])
 			print ("* No hay ningún camino con línea de visión a la nube de posibles posiciones del enemigo, se selecciona el más cercano a la posición enemiga")
+			print(candidate_path)
+			print ("* Acciones del jugador para recorrer el camino:")
+			print(path)
 
 		# Movimiento a llevar a cabo en esta fase (MovementPath)
 		action_path = path

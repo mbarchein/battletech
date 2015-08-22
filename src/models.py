@@ -167,10 +167,11 @@ class GameMap:
 
 		return G
 
-	def _walk_map(self, allow_backward=False):
+	def _walk_map(self, allow_backward=False, debug=False):
 		"""
 		Computa el grafo de caminos posibles que se pueden recorrer con el tipo de movimiento "Andar"
-		:type allow_backward: bool  indica si se añaden al grafo de movimientos aquellos que son hacia "Atras"
+		:param allow_backward: bool  indica si se añaden al grafo de movimientos aquellos que son hacia "Atras"
+		:param debug: bool  si es True se muestra información de depuración
 		:return: (DiGraph) Grafo dirigido con caminos posibles y costes. Los nodos son de tipo MechPosition
 		"""
 
@@ -194,9 +195,11 @@ class GameMap:
 				# Coste del movimiento
 				weight = self.movement_cost(u, v, restrictions=[])
 
+				if debug: print("El coste calculado para {0} --> {1} es {2}".format(u, v, weight))
+
 				# Si no se obtiene distancia, es que se trata de un camino imposible de seguir y en ese caso no se añade
 				# al grafo de movimientos válidos
-				if weight:
+				if weight is not None:
 					G.add_edge(u, v, weight=weight, action="Adelante")
 
 				if allow_backward:
@@ -242,7 +245,7 @@ class GameMap:
 
 				# Si no se obtiene distancia, es que se trata de un camino imposible de seguir y en ese caso no se añade
 				# al grafo de movimientos válidos
-				if weight:
+				if weight is not None:
 					G.add_edge(u, v, weight=weight, action="Adelante")
 
 		return G
@@ -290,11 +293,11 @@ class GameMap:
 			astar_path = networkx.astar_path(self.movement_graph[movement_type], source, target)
 			path = MovementPath(self, astar_path, movement_type)
 			if debug:
-				print ("* Camino {0} --> {1} mediante \"{2}\"".format(source, target, action))
+				print ("Camino {0} --> {1} mediante \"{2}\"".format(source, target, action))
 				print(path)
 		except networkx.NetworkXNoPath:
 			if debug:
-				print ("* No hay camino {0} --> {1} mediante \"{2}\"".format(source, target, action))
+				print ("No hay camino {0} --> {1} mediante \"{2}\"".format(source, target, action))
 			path = None
 
 		return path
@@ -341,20 +344,6 @@ class GameMap:
 		paths = [self.best_path(source, target, movement_type) for target in targets]
 		paths.sort()
 		return paths
-
-
-	def nearest_path_to_set(self, source, targets, movement_type):
-		"""
-		Computa la distancia mínima desde source a cada uno de los targets y devuelve el MovementPath al target más
-		cercano
-		:param source: (MechPosition) posición de inicio
-		:param targets: (set) conjunto de MechPositions a analizar
-		:param movement_type: (str) tipo de movimiento ("walk" o "run")
-		:return:
-		"""
-		paths = self.paths_to_set(source, targets, movement_type)
-		return paths[0]
-
 
 	@classmethod
 	def parsefile(cls, player_id):
@@ -417,11 +406,11 @@ class GameMap:
 				if col % 2 == 1:
 					mapinfo[q][r].neighbors = {
 						1: mapinfo[q  ][r-1] if r>1 else None,
-						2: mapinfo[q+1][r  ] if q<width and r>1 else None,
+						2: mapinfo[q+1][r  ] if q<width else None,
 						3: mapinfo[q+1][r+1] if q<width and r<height else None,
 						4: mapinfo[q  ][r+1] if r<height else None,
 						5: mapinfo[q-1][r+1] if q>1 and r<height else None,
-						6: mapinfo[q-1][r  ] if q>1 and r>1 else None
+						6: mapinfo[q-1][r  ] if q>1 else None
 					}
 				else:
 					mapinfo[q][r].neighbors = {
@@ -467,7 +456,7 @@ class GameMap:
 			raise ValueError("El arco {0},{1} no existe en el grafo de movimientos permitidos".format(source, target))
 
 	@classmethod
-	def movement_cost(cls, source, target,restrictions=None):
+	def movement_cost(cls, source, target,restrictions=None, debug=False):
 		"""
 		Computa el coste de movimiento desde la MechPosition a --> b. Ambas MechPosition deben corresponderse a Hextiles
 		adyacentes.
@@ -478,6 +467,7 @@ class GameMap:
 							 las siguientes restricciones:
 								 "backward" --> El mech está caminando hacia atrás
 								 "running"  --> El mech está corriendo
+		:param debug: bool  si es True se muestra información de depuración
 		:return: int coste del movimiento o None si el movimiento no se posible
 		"""
 		if not restrictions:
@@ -488,8 +478,9 @@ class GameMap:
 
 		# Coste de rotación
 		cost = cls.rotation_cost(source.rotation, target.rotation)
-
-		# El coste de no cambiar de Hextile es 0, por lo que se finaliza el cálculo
+		if debug: print("cost A", source, target, cost, impossible)
+		# El coste de no cambiar de Hextile es 0, por lo que se finaliza el cálculo devolviendo únicamente el coste
+		# de rotación calculado antes
 		if source.hextile == target.hextile:
 			return cost
 
@@ -499,6 +490,8 @@ class GameMap:
 		# Despejado o pavimentado
 		if target.hextile.terrain_type in (0,1):
 			cost += 1
+
+		if debug: print("cost B", source, target, cost, impossible)
 
 		# Agua
 		if target.hextile.terrain_type == 2:
@@ -511,9 +504,13 @@ class GameMap:
 			if target.hextile.level >= -2:
 				cost += 4
 
+		if debug: print("cost C", source, target, cost, impossible)
+
 		# Pantanoso
 		if target.hextile.terrain_type == 3:
 			cost += 2
+
+		if debug: print("cost D", source, target, cost, impossible)
 
 		################################
 		## Cambio de elevación
@@ -524,6 +521,8 @@ class GameMap:
 		if "bacward" in restrictions and level_change != 0:
 			impossible = True
 
+		if debug: print("cost E", source, target, cost, impossible)
+
 		if level_change == 0:
 			pass
 		elif level_change == 1:
@@ -533,6 +532,8 @@ class GameMap:
 		else:
 			# No se permiten cambios de nivel superiores a 2
 			impossible = True
+
+		if debug: print("cost F", source, target, cost, impossible)
 
 		##################################
 		## Objetos en el terreno
@@ -550,9 +551,13 @@ class GameMap:
 		elif target.hextile.object_type == 1:
 			cost += 3
 
+		if debug: print("cost G", source, target, cost, impossible)
+
 		## Resultado
 		if impossible:
 			cost = None
+
+		if debug: print("cost H", source, target, cost, impossible)
 
 		return cost
 
@@ -564,9 +569,8 @@ class GameMap:
 		:param target_rotation: (int) rotación final
 		:return: (int) coste para efectuar el giro
 		"""
-
-
 		diff = (target_rotation - source_rotation) % 6
+
 		if diff >= 4:
 			return 6-diff
 		else:
@@ -697,7 +701,8 @@ class MechPosition:
 		return self.__str__()
 
 	def __eq__(self, other):
-		return self.__dict__ == other.__dict__
+		res =  self.__dict__ == other.__dict__
+		return res
 
 	def __hash__(self):
 		return int(str(self.rotation) + self.hextile.name)
