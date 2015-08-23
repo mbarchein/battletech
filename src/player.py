@@ -44,6 +44,7 @@ class Game:
 		if self.phase == "Movimiento":
 			action = self.movement_phase()
 		if self.phase == "Reaccion":
+			action = self.reaction_phase()
 			pass
 		if self.phase == "AtaqueArmas":
 			pass
@@ -60,13 +61,13 @@ class Game:
 	def movement_phase(self):
 		"""
 		Ejecuta la fase de movimiento
-		:return: None
+		:return: (list) lista de cadenas con acciones que se grabarán en el fichero
 		"""
 		player_position = self.player_position
 		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
 
-		print("* Mech jugador en {0}".format(player_position))
-		print("* Mech enemigo en {0}".format(enemy_position))
+		print("* FASE DE MOVIMIENTO")
+		print("* Mech jugador en {0} y mech enemigo en {1}".format(player_position, enemy_position))
 
 		movement_points = {
 			'walk': self.player.movement_walk,
@@ -217,6 +218,41 @@ class Game:
 			print("------ fin del fichero {0}    ---------".format(filename))
 
 		return filename
+
+	def reaction_phase(self):
+		"""
+		Ejecuta la fase de reacción
+		:return: (list) lista de cadenas con acciones que se grabarán en el fichero
+		"""
+		player_position = self.player_position
+		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
+
+		print("* FASE DE REACCIÓN")
+		print("* El jugador está en {0} y el enemigo está en {1}".format(player_position, enemy_position))
+
+		# intentar conseguir encaramiento hacia el enemigo
+		optimal_player_position = player_position.get_position_facing_to(enemy_position)
+		cost = player_position.rotation_cost(optimal_player_position)
+
+		if cost != 0:
+			direction = player_position.rotation_direction(enemy_position)
+			print("* La rotación óptima es {0} {1}".format(cost, direction))
+		else:
+			direction = None
+			print("* El jugador ya está en la rotación óptima")
+
+		if direction == "left":
+			reaction = "Izquierda"
+		elif direction == "right":
+			reaction = "Derecha"
+		else:
+			reaction = "Igual"
+
+		print("* Se realiza la acción '{0}'".format(reaction))
+
+		action = [ reaction ]
+		return action
+
 
 def run():
 	if len(sys.argv) != 3:

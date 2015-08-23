@@ -477,7 +477,7 @@ class GameMap:
 		impossible = False
 
 		# Coste de rotación
-		cost = cls.rotation_cost(source.rotation, target.rotation)
+		cost = source.rotation_cost(target)
 		if debug: print("cost A", source, target, cost, impossible)
 		# El coste de no cambiar de Hextile es 0, por lo que se finaliza el cálculo devolviendo únicamente el coste
 		# de rotación calculado antes
@@ -561,20 +561,6 @@ class GameMap:
 
 		return cost
 
-	@classmethod
-	def rotation_cost(cls, source_rotation, target_rotation):
-		"""
-		Calcula el coste para realizar un giro.
-		:param source_rotation: (int) rotación inicial
-		:param target_rotation: (int) rotación final
-		:return: (int) coste para efectuar el giro
-		"""
-		diff = (target_rotation - source_rotation) % 6
-
-		if diff >= 4:
-			return 6-diff
-		else:
-			return diff
 
 	@staticmethod
 	def get_edge_data(graph, a, b):
@@ -783,6 +769,31 @@ class MechPosition:
 		# Devolver MechPosition original con rotación modificada
 		return MechPosition(desired_heading, source)
 
+	def rotation_direction(self, target):
+		"""
+		Calcula el la dirección para realizar una rotación
+		:param target: (MechPosition) posición final
+		:return: (str) "left" | "right" | "none", indicando dirección en la que hay que girar
+		"""
+		diff = (target.rotation - self.rotation) % 6
+
+		if diff >= 4:
+			return "left"
+		else:
+			return "right"
+
+	def rotation_cost(self, target):
+		"""
+		Calcula el coste para realizar una rotación
+		:param target: (MechPosition) posición final
+		:return: (int) coste para efectuar el giro
+		"""
+		diff = (target.rotation - self.rotation) % 6
+
+		if diff >= 4:
+			return 6-diff
+		else:
+			return diff
 
 class MovementPath:
 	"""
