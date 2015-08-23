@@ -10,7 +10,7 @@ class Mech:
 			mech_id, active, disconnected, swamped, ground, hextile, heading, torso_heading, temperature, on_fire,
 			has_club, club_type, shield, hull, narc, inarc,
 			movement_walk=None, movement_run=None, movement_jump=None, num_radiators_on=None, num_radiators_off=None,
-			mechwarrior_wounds=None, mechwarrior_conscious=None, slots=None, shooting_locations=None,
+			mechwarrior_wounds=None, mechwarrior_conscious=None, damaged_slots=None, shooting_locations=None,
 			ejection_ready_ammo=None
 	):
 		self.id = mech_id
@@ -36,7 +36,7 @@ class Mech:
 		self.num_radiators_off = num_radiators_off
 		self.mechwarrior_wounds = mechwarrior_wounds
 		self.mechwarrior_conscious = mechwarrior_conscious
-		self.slots = slots
+		self.damaged_slots = damaged_slots
 		self.shooting_locations = shooting_locations
 		self.ejection_ready_ammo = ejection_ready_ammo
 
@@ -84,7 +84,7 @@ class Mech:
 				mechdata['num_radiators_off']      = readint(f)
 				mechdata['mechwarrior_wounds']     = readint(f)
 				mechdata['mechwarrior_conscious']  = readbool(f)
-				mechdata['slots']                  = [readbool(f) for _ in range(0,78)]
+				mechdata['damaged_slots']                  = [readbool(f) for _ in range(0,78)]
 				mechdata['shooting_locations']     = [readbool(f) for _ in range(0,8)]
 
 				# Munición lista para ser expulsada
@@ -126,29 +126,42 @@ class GameMap:
 		Inicializa el mapa de juego
 		:param mapdata: mapa de juego (diccionario a tres niveles)
 		"""
-		self.map = mapdata
-		self.map_byname = {}
-		self.movement_graph = {}
-		self.adjacency_graph = None
+
+		# Lista bidimensional con los Hextiles del mapa. Las coordenadas son enteros 1..ancho x 1..alto
+		self.hextile_by_coord = mapdata
+
+		# Diccionario monodimensional con los Hextiles. La clave es el str con el nombre del Hextile
+		self.hextile_by_name = {}  # se inicializa más adelante
+
+		# Diccionario de grafos de MechPosition con movimientos posibles según tipo de movimiento.
+		self.movement_graph = {}   # se inicializa más adelante
+
+		# Grafo de Hextile con adyacencias simples de Hextile
+		self.adjacency_graph = None # se inicializa más adelante
+
+		# Anchura y altura del mapa
 		self.width = len(mapdata)
 		self.height = len(mapdata[list(mapdata.keys())[0]])
 
 		# construir diccionario por "nombre" de cada Hextile
-		self.map_byname = {}
-		for _,col in self.map.items():
+		self.hextile_by_name = {}
+		for _,col in self.hextile_by_coord.items():
 			# noinspection PyAssignmentToLoopOrWithParameter
 			for _,hextile in col.items():
-				self.map_byname[hextile.name] = hextile
+				self.hextile_by_name[hextile.name] = hextile
 
+		# Construir grafos de movimientos posibles (MechPosition)
 		self.movement_graph['walk'] = self._walk_map()
 		self.movement_graph['run'] = self._run_map()
+
+		# Construir grafo de adyacencias simples de Hextiles
 		self.adjacency_graph = self._hextile_adjacency_graph()
 
 	def __str__(self):
 		out = []
-		for q in self.map:
-			for r in self.map[q]:
-				out.append(self.map[q][r].get_extended_info())
+		for q in self.hextile_by_coord:
+			for r in self.hextile_by_coord[q]:
+				out.append(self.hextile_by_coord[q][r].get_extended_info())
 
 		return "\n".join(out)
 
@@ -159,7 +172,7 @@ class GameMap:
 		:return: (Graph) Grafo no dirigido de adyacencias entre Hextiles
 		"""
 		G = networkx.Graph()
-		for hextile in self.map_byname.values():
+		for hextile in self.hextile_by_name.values():
 			for neighbor in hextile.neighbors.values():
 				# Añadir arco entre nodos. Para este grafo, cada nodo estará separado de cualquiera de sus vecinos por
 				# una distancia de 1
@@ -181,7 +194,7 @@ class GameMap:
 		# Movimientos de rotación
 		self._add_rotation_movements(G)
 
-		for name,hextile in self.map_byname.items():
+		for name,hextile in self.hextile_by_name.items():
 			# Crear arcos entre hextiles vecinos, computando el coste del movimiento "Adelante" y "Atras", en caso de
 			# que este último esté permitido (se mantiene rotación en ambos movimientos). Se calcula para cada movimiento
 			# permitido el coste, teniendo en cuenta tipos de terreno, elevación, etc.
@@ -229,7 +242,7 @@ class GameMap:
 		# Movimientos de rotación
 		self._add_rotation_movements(G)
 
-		for name,hextile in self.map_byname.items():
+		for name,hextile in self.hextile_by_name.items():
 			# Crear arcos entre hextiles vecinos, computando el coste del movimiento "Adelante" ("Atras" no está permitido
 			# si el tipo de movimiento es "Correr"). Se calcula para cada movimiento permitido el coste, teniendo en
 			# cuenta tipos de terreno, elevación, etc.
@@ -259,7 +272,7 @@ class GameMap:
 		:return: None
 		"""
 
-		for name,hextile in self.map_byname.items():
+		for name,hextile in self.hextile_by_name.items():
 			# Crear arcos "internos" entre las seis caras del hexágono, con un coste de movimiento de 1 asociado a la
 			# rotación del mech hacia una cara adyacente del hexágono
 
@@ -311,7 +324,7 @@ class GameMap:
 		s = hextile.name
 
 		H = networkx.ego_graph(G, s, radius, center=False)
-		nodes = [self.map_byname[hextile_name] for hextile_name in H.nodes()]
+		nodes = [self.hextile_by_name[hextile_name] for hextile_name in H.nodes()]
 		return nodes
 
 	def farthest_movemnts_possible(self, source, movement_points, movement_type):
@@ -434,7 +447,7 @@ class GameMap:
 		gamemap = GameMap(mapdata=mapinfo)
 
 		# Actualizar información de los hextiles para que tengan asociado el gamemap recién creado
-		for _,hextile in gamemap.map_byname.items():
+		for _,hextile in gamemap.hextile_by_name.items():
 			hextile.map = gamemap
 
 		return gamemap
@@ -970,7 +983,7 @@ class LineOfSightAndCover:
 
 		# Calcular lista de Hextiles de la linea de visión
 		path_str = readstr(f)
-		path = [gamemap.map_byname[i] for i in path_str.split(" ")] if len(path_str)>0 else []
+		path = [gamemap.hextile_by_name[i] for i in path_str.split(" ")] if len(path_str)>0 else []
 
 		data = {
 			"path": path,
@@ -979,7 +992,7 @@ class LineOfSightAndCover:
 		}
 
 		f.close()
-		out =  LineOfSightAndCover(source=gamemap.map_byname[source], target=gamemap.map_byname[target], **data)
+		out =  LineOfSightAndCover(source=gamemap.hextile_by_name[source], target=gamemap.hextile_by_name[target], **data)
 		return out
 
 	def __str__(self):

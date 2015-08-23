@@ -26,7 +26,7 @@ class Game:
 
 		# actualizar hextiles de los mechs con referencias a los objetos Hextile
 		for mech in self.mechs:
-			mech.hextile = self.map.map_byname[mech.hextile]
+			mech.hextile = self.map.hextile_by_name[mech.hextile]
 
 		# Posiciones
 		self.player_position = MechPosition(self.player.heading, self.player.hextile)
@@ -208,13 +208,13 @@ class Game:
 		:return:
 		"""
 		filename = "accionJ{0}.sbt".format(self.player_id)
-		out = "\n".join(action)
+		out = "\n".join(action) + "\n"
 		f = open(filename, "w")
 		f.write(out)
 		f.close()
 		if debug:
 			print("------ inicio del fichero {0} ---------".format(filename))
-			print(out)
+			print(out,end="")
 			print("------ fin del fichero {0}    ---------".format(filename))
 
 		return filename
