@@ -47,6 +47,7 @@ class Game:
 			action = self.reaction_phase()
 			pass
 		if self.phase == "AtaqueArmas":
+			action = self.weapon_attack()
 			pass
 		if self.phase == "AtaqueFisico":
 			pass
@@ -235,7 +236,7 @@ class Game:
 		cost = player_position.rotation_cost(optimal_player_position)
 
 		if cost != 0:
-			direction = player_position.rotation_direction(enemy_position)
+			direction = player_position.rotation_direction(optimal_player_position)
 			print("* La rotación óptima es {0} {1}".format(cost, direction))
 		else:
 			direction = None
@@ -253,8 +254,32 @@ class Game:
 		action = [ reaction ]
 		return action
 
+	def weapon_attack(self):
+		player_position = self.player_position
+		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
 
-def run():
+		print("* FASE DE ATAQUE CON ARMAS")
+		print("* El jugador está en {0} y el enemigo está en {1}".format(player_position, enemy_position))
+
+		return self.no_weapon_attack()
+
+	def no_weapon_attack(self):
+		"""
+		Genera la lista de comandos para indicar que _no_ se va a atacar con armas en el turno
+		:return: (list) lista de (str) con los comandos
+		"""
+
+		actions = [
+			"False",
+			"0000"
+			"0"
+		]
+
+		print("* No se realiza ataque con armas por parte del jugador {0}".format(self.player_id))
+		return actions
+
+
+def start():
 	if len(sys.argv) != 3:
 		raise ValueError("Número de argumentos inválido")
 
@@ -269,5 +294,5 @@ def run():
 	game.start()
 
 # inicializar la ejecución
-run()
+start()
 print("FIN")

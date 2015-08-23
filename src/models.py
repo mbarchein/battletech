@@ -741,11 +741,12 @@ class MechPosition:
 
 		raise NotImplemented()
 
-	def get_position_facing_to(self, target):
+	def get_position_facing_to(self, target, debug=False):
 		"""
 		Devuelve la MechPosition adecuada para que, mirando desde el este Hextile, el mech apunte de cara al Hextile
 		"target"
 		:param target: (Hextile) | (MechPosition) destino al que hay que apuntar
+		:param debug: (bool) True para mostrar información de depuración
 		:return: (MechPosition) Posición del hextile actual con encaramiento modificado para que apunte hacia el
 		                        Hextile "target"
 		"""
@@ -769,12 +770,16 @@ class MechPosition:
 		G = source.map.adjacency_graph
 		path = networkx.astar_path(G, source, target)
 
+		if debug: print(path)
+
 		# Este es el Hextile que indica la dirección correcta
 		heading_neighbor = path[1]
+		if debug: print("Encarar hacia {0}".format(heading_neighbor))
 
 		for rotation, neighbor in source.neighbors.items():
 			if heading_neighbor == neighbor:
 				desired_heading = rotation
+				if debug: print("{0} está en dirección {2} con respecto a {1}".format(heading_neighbor, source, desired_heading))
 				break
 		else:
 			raise ValueError("No se ha encontrado el Hextile {0} entre los vecinos de {1}", heading_neighbor, source)
