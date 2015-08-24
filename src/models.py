@@ -100,129 +100,113 @@ class Mech:
 
 	@staticmethod
 	def parsefile(player_id):
-		# Fichero con información de mechs para jugador actual
+		"""
+		Parsea los ficheros con la información de los Mechs
+		:rtype : list[Mech]
+		"""
 		f1 = open("mechsJ{0}.sbt".format(player_id), "r")
-
-		# encabezado con magic number
-		assert(readstr(f1) == "mechsSBT")
-
-		# Array con mechs que se devolverá
-		mechs=[]
-
+		assert (readstr(f1) == "mechsSBT")
+		mechs = []
 		num_mechs = readint(f1)
 		print("* Hay {0} mechs en el juego".format(num_mechs))
-
-		for mech_id in range(0,num_mechs):
+		for mech_id in range(0, num_mechs):
 			mechdata = {}
 			# número de mech que se está analizando debe coincidir con el índice
-			assert(readint(f1) == mech_id)
+			assert (readint(f1) == mech_id)
 			print("* Leyendo información del mech {0}".format(mech_id))
-			mechdata['active']          = readbool(f1)
-			mechdata['disconnected']    = readbool(f1)
-			mechdata['swamped']         = readbool(f1)
-			mechdata['ground']          = readbool(f1)
-			mechdata['hextile']         = readstr(f1)
-			mechdata['heading']         = readint(f1)
-			mechdata['torso_heading']   = readint(f1)
-			mechdata['temperature']     = readint(f1)
-			mechdata['on_fire']         = readbool(f1)
-			mechdata['has_club']        = readbool(f1)
-			mechdata['club_type']       = readint(f1)
-			mechdata['shield']          = [readint(f1) for _ in range(0,11)]
-			mechdata['hull']            = [readint(f1) for _ in range(0,8)]
+			mechdata['active'] = readbool(f1)
+			mechdata['disconnected'] = readbool(f1)
+			mechdata['swamped'] = readbool(f1)
+			mechdata['ground'] = readbool(f1)
+			mechdata['hextile'] = readstr(f1)
+			mechdata['heading'] = readint(f1)
+			mechdata['torso_heading'] = readint(f1)
+			mechdata['temperature'] = readint(f1)
+			mechdata['on_fire'] = readbool(f1)
+			mechdata['has_club'] = readbool(f1)
+			mechdata['club_type'] = readint(f1)
+			mechdata['shield'] = [readint(f1) for _ in range(0, 11)]
+			mechdata['hull'] = [readint(f1) for _ in range(0, 8)]
 
 			# Leer datos de movimiento, daños y otros (sólo si es el jugador actual)
 			if player_id == mech_id:
 				print("* El mech {0} es el jugador actual".format(mech_id))
-				mechdata['movement_walk']          = readint(f1)
-				mechdata['movement_run']           = readint(f1)
-				mechdata['movement_jump']          = readint(f1)
-				mechdata['num_heat_sinks_on']      = readint(f1)
-				mechdata['num_heat_sinks_off']     = readint(f1)
-				mechdata['mechwarrior_wounds']     = readint(f1)
-				mechdata['mechwarrior_conscious']  = readbool(f1)
-				mechdata['damaged_slots']          = [readbool(f1) for _ in range(0,78)]
-				mechdata['shooting_locations']     = [readbool(f1) for _ in range(0,8)]
+				mechdata['movement_walk'] = readint(f1)
+				mechdata['movement_run'] = readint(f1)
+				mechdata['movement_jump'] = readint(f1)
+				mechdata['num_heat_sinks_on'] = readint(f1)
+				mechdata['num_heat_sinks_off'] = readint(f1)
+				mechdata['mechwarrior_wounds'] = readint(f1)
+				mechdata['mechwarrior_conscious'] = readbool(f1)
+				mechdata['damaged_slots'] = [readbool(f1) for _ in range(0, 78)]
+				mechdata['shooting_locations'] = [readbool(f1) for _ in range(0, 8)]
 
 				# Munición lista para ser expulsada
 				num_ejection_ready_ammo = readint(f1)
-				mechdata['ejection_ready_ammo'] = [Ammo(location=readstr(f1), slot=readint(f1)) for _ in range(0, num_ejection_ready_ammo)]
+				mechdata['ejection_ready_ammo'] = [Ammo(location=readstr(f1), slot=readint(f1)) for _ in
+					range(0, num_ejection_ready_ammo)]
 
 			# Datos de narcs e inarcs para todos los jugadores
-			mechdata['narc']        = [readbool(f1) for _ in range (0, num_mechs)]
-			mechdata['inarc']       = [readbool(f1) for _ in range (0, num_mechs)]
+			mechdata['narc'] = [readbool(f1) for _ in range(0, num_mechs)]
+			mechdata['inarc'] = [readbool(f1) for _ in range(0, num_mechs)]
 
 			# Parsear fichero defmechJ#.sbt
 			f2 = open("defmechJ{0}-{1}.sbt".format(player_id, mech_id), "r")
 
 			# encabezado con magic number
-			assert(readstr(f2) == "defmechSBT")
-			mechdata['name']                     = readstr(f2)
-			mechdata['model']                    = readstr(f2)
-			mechdata['weight']                   = readint(f2)
-			mechdata['power']                    = readint(f2)
-			mechdata['num_internal_heat_sinks']  = readint(f2)
-			mechdata['num_heat_sinks']           = readint(f2)
-			mechdata['has_masc']                 = readbool(f2)
-			mechdata['dacmtd']                   = readbool(f2)
-			mechdata['dacmti']                   = readbool(f2)
-			mechdata['dacmtc']                   = readbool(f2)
-			mechdata['max_heat_generated']       = readint(f2)
-			mechdata['has_arms']                 = readbool(f2)
-			mechdata['has_left_shoulder']        = readbool(f2)
-			mechdata['has_left_arm']             = readbool(f2)
-			mechdata['has_left_forearm']         = readbool(f2)
-			mechdata['has_left_hand']            = readbool(f2)
-			mechdata['has_right_shoulder']       = readbool(f2)
-			mechdata['has_right_arm']            = readbool(f2)
-			mechdata['has_right_forearm']        = readbool(f2)
-			mechdata['has_right_hand']           = readbool(f2)
-			mechdata['shield_left_arm']          = readint(f2)
-			mechdata['shield_left_torso']        = readint(f2)
-			mechdata['shield_left_leg']          = readint(f2)
-			mechdata['shield_right_leg']         = readint(f2)
-			mechdata['shield_right_torso']       = readint(f2)
-			mechdata['shield_right_arm']         = readint(f2)
-			mechdata['shield_center_torso']      = readint(f2)
-			mechdata['shield_head']              = readint(f2)
-			mechdata['shield_back_left_torso']   = readint(f2)
-			mechdata['shield_back_right_torso']  = readint(f2)
+			assert (readstr(f2) == "defmechSBT")
+			mechdata['name'] = readstr(f2)
+			mechdata['model'] = readstr(f2)
+			mechdata['weight'] = readint(f2)
+			mechdata['power'] = readint(f2)
+			mechdata['num_internal_heat_sinks'] = readint(f2)
+			mechdata['num_heat_sinks'] = readint(f2)
+			mechdata['has_masc'] = readbool(f2)
+			mechdata['dacmtd'] = readbool(f2)
+			mechdata['dacmti'] = readbool(f2)
+			mechdata['dacmtc'] = readbool(f2)
+			mechdata['max_heat_generated'] = readint(f2)
+			mechdata['has_arms'] = readbool(f2)
+			mechdata['has_left_shoulder'] = readbool(f2)
+			mechdata['has_left_arm'] = readbool(f2)
+			mechdata['has_left_forearm'] = readbool(f2)
+			mechdata['has_left_hand'] = readbool(f2)
+			mechdata['has_right_shoulder'] = readbool(f2)
+			mechdata['has_right_arm'] = readbool(f2)
+			mechdata['has_right_forearm'] = readbool(f2)
+			mechdata['has_right_hand'] = readbool(f2)
+			mechdata['shield_left_arm'] = readint(f2)
+			mechdata['shield_left_torso'] = readint(f2)
+			mechdata['shield_left_leg'] = readint(f2)
+			mechdata['shield_right_leg'] = readint(f2)
+			mechdata['shield_right_torso'] = readint(f2)
+			mechdata['shield_right_arm'] = readint(f2)
+			mechdata['shield_center_torso'] = readint(f2)
+			mechdata['shield_head'] = readint(f2)
+			mechdata['shield_back_left_torso'] = readint(f2)
+			mechdata['shield_back_right_torso'] = readint(f2)
 			mechdata['shield_back_center_torso'] = readint(f2)
-			mechdata['hull_left_arm']            = readint(f2)
-			mechdata['hull_left_torso']          = readint(f2)
-			mechdata['hull_left_leg']            = readint(f2)
-			mechdata['hull_right_leg']           = readint(f2)
-			mechdata['hull_right_torso']         = readint(f2)
-			mechdata['hull_right_arm']           = readint(f2)
-			mechdata['hull_center_torso']        = readint(f2)
-			mechdata['hull_head']                = readint(f2)
+			mechdata['hull_left_arm'] = readint(f2)
+			mechdata['hull_left_torso'] = readint(f2)
+			mechdata['hull_left_leg'] = readint(f2)
+			mechdata['hull_right_leg'] = readint(f2)
+			mechdata['hull_right_torso'] = readint(f2)
+			mechdata['hull_right_arm'] = readint(f2)
+			mechdata['hull_center_torso'] = readint(f2)
+			mechdata['hull_head'] = readint(f2)
 
 			# Componentes equipados
 			num_equipped_components = readint(f2)
 			equipped_components = []
 
 			for _ in range(num_equipped_components):
-				component = {
-					'code':               readint(f2),
-					'name':               readstr(f2),
-					'class':              readstr(f2),
-					'back_mounted':       readbool(f2),
-					'primary_location':   readint(f2),
-					'secondary_location': readint(f2),
-					'weapon_type':        readstr(f2),
-					'heat':               readint(f2),
-					'damage':             readint(f2),
-					'shoots_per_round':   readint(f2),
-					'min_range':          readint(f2),
-					'short_range':        readint(f2),
-					'medium_range':       readint(f2),
-					'long_range':         readint(f2),
-					'working':            readbool(f2),
-					'ammo_weapon_code':   readint(f2),
-					'quantity':           readint(f2),
-					'special_ammo':       readbool(f2),
-					'shooting_modifier':  readint(f2),
-				}
+				component = {'code': readint(f2), 'name': readstr(f2), 'class': readstr(f2),
+					'back_mounted': readbool(f2), 'primary_location': readint(f2), 'secondary_location': readint(f2),
+					'weapon_type': readstr(f2), 'heat': readint(f2), 'damage': readint(f2),
+					'shoots_per_round': readint(f2), 'min_range': readint(f2), 'short_range': readint(f2),
+					'medium_range': readint(f2), 'long_range': readint(f2), 'working': readbool(f2),
+					'ammo_weapon_code': readint(f2), 'quantity': readint(f2), 'special_ammo': readbool(f2),
+					'shooting_modifier': readint(f2), }
 
 				equipped_components.append(component)
 
@@ -233,13 +217,8 @@ class Mech:
 			num_actuators = readint(f2)
 			actuators = []
 			for _ in range(num_actuators):
-				actuator = {
-					'code':     readint(f2),
-					'name':     readstr(f2),
-					'location': readint(f2),
-					'working':  readbool(f2),
-					'hits':     readint(f2),
-				}
+				actuator = {'code': readint(f2), 'name': readstr(f2), 'location': readint(f2), 'working': readbool(f2),
+					'hits': readint(f2), }
 				actuators.append(actuator)
 
 			mechdata['actuators'] = actuators
@@ -252,15 +231,9 @@ class Mech:
 				slots = []
 
 				for _ in range(num_slots):
-					slot = {
-						'class':                readstr(f2),
-						'quantity':             readint(f2),
-						'code':                 readint(f2),
-						'name':                 readstr(f2),
-						'component_index':      readint(f2),
-						'actuator_index':       readint(f2),
-						'critical_ammo_damage': readint(f2)
-					}
+					slot = {'class': readstr(f2), 'quantity': readint(f2), 'code': readint(f2), 'name': readstr(f2),
+						'component_index': readint(f2), 'actuator_index': readint(f2),
+						'critical_ammo_damage': readint(f2)}
 
 					slots.append(slot)
 
@@ -270,9 +243,9 @@ class Mech:
 
 			# Datos de movimiento
 			mechdata['movement_points_walk'] = readint(f2)
-			mechdata['movement_points_run']  = readint(f2)
+			mechdata['movement_points_run'] = readint(f2)
 			mechdata['movement_points_jump'] = readint(f2)
-			mechdata['heat_sink_type']       = readint(f2)
+			mechdata['heat_sink_type'] = readint(f2)
 
 			# fin de fichero "defmechJ#.sbt"
 			f2.close()
@@ -281,10 +254,7 @@ class Mech:
 			mech = Mech(mech_id=mech_id, **mechdata)
 			mechs.append(mech)
 
-		# fin de fichero "mechsJ#.sbt"
 		f1.close()
-
-		# devolver listado de mechs
 		return mechs
 
 

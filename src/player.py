@@ -64,6 +64,7 @@ class Game:
 		Ejecuta la fase de movimiento
 		:return: (list) lista de cadenas con acciones que se grabarán en el fichero
 		"""
+		enemy_mech = self.enemies[0]
 		player_position = self.player_position
 		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
 
@@ -78,19 +79,10 @@ class Game:
 
 		print("* Puntos de movimiento: Andar {walk}, Correr {run}, Saltar {jump}".format(**movement_points))
 
-
-		# print(self.map.map_byname["2303"].get_extended_info())
-		# self.map.best_path(MechPosition(3,self.map.map_byname["2205"]), MechPosition(1,self.map.map_byname["2202"]), "walk", debug=True)
-		# edges = self.map.movement_graph['walk'].edges()
-		# for a,b in edges:
-		# 	if a.hextile.name=="2202" or b.hextile.name=="2202":
-		# 		print((a,b))
-		# sys.exit()
-
 		# Determinar cuales son las posiciones máximas a las que puede llegar el mech enemigo en su fase de movimiento
 		# Como no podemos saber los puntos de moniviento que tiene el mech enemigo, asumiremos un valor fijo para estimar
 		# su radio de movimiento
-		estimated_enemy_movement_points = 4
+		estimated_enemy_movement_points = enemy_mech.movement_points_walk
 		estimated_enemy_farthest_movement_positions = self.map.farthest_movemnts_possible(enemy_position, estimated_enemy_movement_points, "walk")
 		print("* El enemigo podría desplazarse a cualquiera de estas {0} posiciones con {1} puntos de movimiento".format(len(estimated_enemy_farthest_movement_positions), estimated_enemy_movement_points))
 		print(estimated_enemy_farthest_movement_positions)
