@@ -232,7 +232,7 @@ class Game:
 		print("* El jugador está en {0} y el enemigo está en {1}".format(player_position, enemy_position))
 
 		# intentar conseguir encaramiento hacia el enemigo
-		optimal_player_position = player_position.get_position_facing_to(enemy_position)
+		optimal_player_position = player_position.get_position_facing_to(enemy_position, debug=True)
 		cost = player_position.rotation_cost(optimal_player_position)
 
 		if cost != 0:

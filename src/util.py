@@ -9,9 +9,11 @@ def readbool(fd) -> bool:
 	line = fd.readline().rstrip("\n")
 	if DEBUG: print(line)
 
-	if line == "True":
+	line = line.lower()
+
+	if line in ("sí", "si", "true"):
 		return True
-	elif line == "False":
+	elif line in ("no", "false"):
 		return False
 	else:
 		raise ValueError("Se esperaba la cadena de texto 'True' o 'False' y se leyó '{0}'".format(line))
