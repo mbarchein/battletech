@@ -56,9 +56,9 @@ class Game:
 		elif self.phase == "AtaqueArmas":
 			action = self.weapon_attack()
 		elif self.phase == "AtaqueFisico":
-			pass
+			action = self.phisical_attack()
 		elif self.phase == "FinalTurno":
-			pass
+			action = self.finish_round()
 		else:
 			raise ValueError("Fase de juego no reconocida: {0}".format(self.phase))
 
@@ -301,6 +301,10 @@ class Game:
 		return action
 
 	def weapon_attack(self):
+		"""
+		Calcula y genera la lista de comandos para la fase de "Ataques con Armas"
+		:return: (list) lista de (str) con los comandos
+		"""
 		player_position = self.player_position
 		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
 
@@ -322,6 +326,51 @@ class Game:
 		]
 
 		print("* No se realiza ataque con armas por parte del jugador {0}".format(self.player_id))
+		return actions
+
+	def phisical_attack(self):
+		"""
+		Calcula y genera la lista de comandos acciones para la fase de "Ataques Físicos"
+		:return: (list) lista de (str) con los comandos
+		"""
+		player_position = self.player_position
+		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
+
+		actions = [
+			"0",     # nº de armas físicas
+			"BI",    # localización
+			"1000",  # slot del arma física
+			"0809",  # hexágono objetivo del arma
+			"Mech",  # tipo de objetivo
+		]
+
+		return self.no_phisical_attack()
+
+	def no_phisical_attack(self):
+		"""
+		Genera la lista de comandos para indicar que _no_ se va a realizar ataque físico en el turno
+		:return: (list) lista de (str) con los comandos
+		"""
+
+		actions = [
+			"0"
+		]
+
+		print("* No se realiza ataque físico por parte del jugador {0}".format(self.player_id))
+		return actions
+
+	def finish_round(self):
+		"""
+		Calcula y genera la lista de comandos acciones para la fase de "Final de Turno"
+		:return: (list) lista de (str) con los comandos
+		"""
+		actions = [
+			"0",     # nº de radiadores a apagar
+			"0",     # nº de radiadores a encender
+			"False", # soltar garrote
+			"0",     # nº de municiones a expulsar
+		]
+
 		return actions
 
 
