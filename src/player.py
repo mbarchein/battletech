@@ -31,6 +31,14 @@ class Game:
 		# Posiciones
 		self.player_position = MechPosition(self.player.heading, self.player.hextile)
 
+		# Puntos de movimiento agrupados
+		self.movement_points = {
+			'walk': self.player.movement_walk,
+			'run' : self.player.movement_run,
+			'jump': self.player.movement_jump
+		}
+
+
 
 	def start(self):
 		"""
@@ -43,16 +51,16 @@ class Game:
 
 		if self.phase == "Movimiento":
 			action = self.movement_phase()
-		if self.phase == "Reaccion":
+		elif self.phase == "Reaccion":
 			action = self.reaction_phase()
-			pass
-		if self.phase == "AtaqueArmas":
+		elif self.phase == "AtaqueArmas":
 			action = self.weapon_attack()
+		elif self.phase == "AtaqueFisico":
 			pass
-		if self.phase == "AtaqueFisico":
+		elif self.phase == "FinalTurno":
 			pass
-		if self.phase == "FinalTurno":
-			pass
+		else:
+			raise ValueError("Fase de juego no reconocida: {0}".format(self.phase))
 
 		# Grabar acciones a realizar en fichero
 		filename = self.save_action(action)
@@ -64,20 +72,74 @@ class Game:
 		Ejecuta la fase de movimiento
 		:return: (list) lista de cadenas con acciones que se grabarán en el fichero
 		"""
+		player_mech = self.player
 		enemy_mech = self.enemies[0]
 		player_position = self.player_position
 		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
 
 		print("* FASE DE MOVIMIENTO")
 		print("* Mech jugador en {0} y mech enemigo en {1}".format(player_position, enemy_position))
+		print("* Puntos de movimiento: Andar {walk}, Correr {run}, Saltar {jump}".format(**self.movement_points))
 
-		movement_points = {
-			'walk': self.player.movement_walk,
-			'run' : self.player.movement_run,
-			'jump': self.player.movement_jump
-		}
+		# Determinar si se puede hacer un ataque a distancia o no y calcular movimiento adecuado (MovementPath)
+		if player_mech.num_weapons != 0:
+			# Moverse de manera que el mech se acerque al enemigo para hacer un ataque con armas
+			print("* El mech dispone de {0} armas".format(player_mech.num_weapons))
+			path = self.move_to_enemy_keep_weapon_range_distance()
+		else:
+			# Moverse a casilla adyacente al enemigo para ataque cuerpo a cuerpo
+			print("* El mech no dispone de armas. Preparar movimiento para ataque físico.")
+			path = self.move_to_enemy_phisical_attack_range()
 
-		print("* Puntos de movimiento: Andar {walk}, Correr {run}, Saltar {jump}".format(**movement_points))
+		# Generar y devolver acciones
+		if path.length == 0:
+			action = self.immobile()
+		else:
+			action = self.walk(path)
+		return action
+
+	def move_to_enemy_phisical_attack_range(self):
+		"""
+		Devuelve el movimiento óptimo para poder hacer un ataque cuerpo a cuerpo
+		:rtype : MovementPath
+		:return: MovementPath camino que hay que recorrer
+		"""
+		player_mech = self.player
+		enemy_mech = self.enemies[0]
+		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
+		player_position = self.player_position
+
+		candidate_positions_raw = enemy_position.surrounding_positions_facing_to_self()
+
+		# filtrar para quedarnos con aquellas posiciones que estén a una altura permitida para el ataque físico
+		candidate_positions = [ pos for pos in candidate_positions_raw if abs(pos.hextile.level - enemy_position.hextile.level) <= 1 ]
+
+		print("* Posiciones interesantes para ataque físico:", candidate_positions)
+
+		candidate_paths = self.map.paths_to_set(player_position, candidate_positions, "walk")
+		if candidate_paths[0]:
+			candidate_path = candidate_paths[0]
+		else:
+			candidate_path = MovementPath(gamemap=self.map, path=[], movement_type="walk")
+
+		path = candidate_path.longest_movement(self.movement_points['walk'])
+
+		print ("* Camino más corto para ataque físico al enemigo:")
+		print(candidate_path)
+		print ("* Acciones del jugador para recorrer el camino:")
+		print(path)
+
+		return path
+
+	def move_to_enemy_keep_weapon_range_distance(self):
+		"""
+		Devuelve el movimiento óptimo para acercarse al enemigo y quedarse a distancia con línea de visión si es posible
+		para poder lanzar un ataque con armamento
+		:return:
+		"""
+		enemy_mech = self.enemies[0]
+		player_position = self.player_position
+		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
 
 		# Determinar cuales son las posiciones máximas a las que puede llegar el mech enemigo en su fase de movimiento
 		# Como no podemos saber los puntos de moniviento que tiene el mech enemigo, asumiremos un valor fijo para estimar
@@ -108,7 +170,7 @@ class Game:
 			# Se busca el primero de los caminos más cortos que al ser recorrido lo que permitan los puntos de movimiento
 			# deja al jugador colocado en línea de visión con el enemigo. Nos aseguramos de que el mech se quede "mirando"
 			# hacia la casilla del enemigo para poder tener mejores posibilidades de ataque
-			path = candidate_path.longest_movement(movement_points['walk'])
+			path = candidate_path.longest_movement(self.movement_points['walk'])
 			line_sc = LineOfSightAndCover.calculate(self.player_id, self.map, path.target, True, candidate_path.target, True)
 			if line_sc.has_line_of_sight:
 				break
@@ -128,21 +190,13 @@ class Game:
 		else:
 			# Recorrer camino más corto para acercarnos al enemigo, sin línea de visión
 			candidate_path = self.map.best_path(player_position, enemy_position, "walk")
-			path = candidate_path.longest_movement(movement_points['walk'])
+			path = candidate_path.longest_movement(self.movement_points['walk'])
 			print ("* No hay ningún camino con línea de visión a la nube de posibles posiciones del enemigo, se selecciona el más cercano a la posición enemiga")
 			print(candidate_path)
 			print ("* Acciones del jugador para recorrer el camino:")
 			print(path)
 
-		# Movimiento a llevar a cabo en esta fase (MovementPath)
-		action_path = path
-
-		# Generar y devolver acciones
-		if action_path.length == 0:
-			action = self.immobile()
-		else:
-			action = self.walk(action_path)
-		return action
+		return path
 
 	def immobile(self, debug=False):
 		"""

@@ -907,7 +907,8 @@ class MechPosition:
 
 		# Se trabaja con los hextiles en este algoritmo
 		source = source.hextile
-		target = target.hextile
+		if type(target) != Hextile:
+			target = target.hextile
 
 		# origen y destino no pueden ser iguales, ya que la solución carece de sentido en este caso
 		if source == target:
@@ -939,6 +940,23 @@ class MechPosition:
 
 		# Devolver MechPosition original con rotación modificada
 		return MechPosition(desired_heading, source)
+
+
+	def surrounding_positions_facing_to_self(self):
+		"""
+		Devuelve los MechPosition que rodean a la instancia y con orientación a la propia instancia
+		:return: lista de MechPosition
+		:rtype: list[MechPosition]
+		"""
+
+		source = self.hextile
+		surrounding_positions = []
+		for rotation, hextile in source.neighbors.items():
+			complementary_rotation = ((rotation + 2) % 6) + 1
+			surrounding_positions.append(MechPosition(complementary_rotation, hextile))
+
+		return surrounding_positions
+
 
 	def rotation_direction(self, target):
 		"""
@@ -988,7 +1006,7 @@ class MovementPath:
 		self.target = self.path[-1]
 
 		# Longitud de la cadena de acciones
-		self.length = len(self.path) - 1
+		self.length = max(len(self.path) - 1, 0)
 
 		# Coste del movimiento a través de 'path'
 		self.cost = None
