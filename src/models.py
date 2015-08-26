@@ -3,9 +3,25 @@ import os
 import sys
 import subprocess
 from util import readstr, readint, readbool, memoize
-
+import pprint
 
 class Mech:
+	# Constantes para localizaciones
+	# 0=BI,1=TI,2=PI,3=PD,4=TD,5=BD,6=TC,7=CAB,8=TIa,9=TDa,10=TCa
+	LOCATION_LEFT_ARM = 0
+	LOCATION_LEFT_TORSO = 1
+	LOCATION_LEFT_LEG = 2
+	LOCATION_RIGHT_LEG = 3
+	LOCATION_RIGHT_TORSO = 4
+	LOCATION_RIGHT_ARM = 5
+	LOCATION_CENTER_TORSO = 6
+	LOCATION_HEAD = 7
+	LOCATION_LEFT_BACK_TORSO = 8
+	LOCATION_RIGHT_BACK_TORSO = 9
+	LOCATION_CENTER_BACK_TORSO = 10
+
+	LOCATIONS = ["BI", "TI", "PI", "PD", "TD", "BD", "TC", "CAB", "TIa", "TDa", "TCa"]
+
 	def __init__(self,
 			mech_id, active, disconnected, swamped, ground, hextile, heading, torso_heading, temperature, on_fire,
 			has_club, club_type, shield, hull, narc, inarc, name, model, weight, power, num_internal_heat_sinks,
@@ -97,6 +113,10 @@ class Mech:
 		self.movement_points_run = movement_points_run
 		self.movement_points_jump = movement_points_jump
 		self.heat_sink_type = heat_sink_type
+
+	def __str__(self):
+		out = pprint.pformat(vars(self), indent=2)
+		return out
 
 	@staticmethod
 	def parsefile(player_id):
@@ -216,10 +236,17 @@ class Mech:
 			# Actuadores
 			num_actuators = readint(f2)
 			actuators = []
-			for _ in range(num_actuators):
-				actuator = {'code': readint(f2), 'name': readstr(f2), 'location': readint(f2), 'working': readbool(f2),
-					'hits': readint(f2), }
-				actuators.append(actuator)
+			for i in range(num_actuators):
+				actuator_data = {
+					'id': i,
+					'code': readint(f2),
+					'name': readstr(f2),
+					'location': readint(f2),
+					'working': readbool(f2),
+					'hits': readint(f2),
+				}
+
+				actuators.append(Actuator(**actuator_data))
 
 			mechdata['actuators'] = actuators
 
@@ -231,7 +258,7 @@ class Mech:
 				slots = []
 
 				for _ in range(num_slots):
-					slot = {'class': readstr(f2), 'quantity': readint(f2), 'code': readint(f2), 'name': readstr(f2),
+					slot = {'class': readstr(f2), 'ammo_quantity': readint(f2), 'code': readint(f2), 'name': readstr(f2),
 						'component_index': readint(f2), 'actuator_index': readint(f2),
 						'critical_ammo_damage': readint(f2)}
 
@@ -257,6 +284,79 @@ class Mech:
 		f1.close()
 		return mechs
 
+	def calculate_phisical_attack(self, enemy):
+		## Determinar ataques físicos permitidos
+		"""
+		Calcula los ataques físicos que se pueden realizar contra el enemigo indicado
+		:type enemy: Mech
+		:param enemy: Mech  enemigo
+		"""
+
+		## Determinar tipos de ataque permitidos según posiciones del jugador y del enemigo
+		if self.ground:
+			print("El jugador está en el suelo, no puede hacer ataques físicos")
+			allowed_attacks = []
+
+		# Mismo nivel de elevación
+		elif self.hextile.level == enemy.hextile.level:
+			if enemy.ground:
+				allowed_attacks = ["kick"]
+			else:
+				allowed_attacks = ["punch", "kick", "club"]
+
+		# Objetivo un nivel por encima
+		elif self.hextile.level + 1 == enemy.hextile.level:
+			if enemy.ground:
+				allowed_attacks = ["kick", "club"]
+			else:
+				allowed_attacks = ["punch", "club"]
+
+		# Objetivo un nivel por debajo
+		elif self.hextile.level == enemy.hextile.level + 1:
+			if enemy.ground:
+				allowed_attacks = []
+			else:
+				allowed_attacks = ["kick", "club"]
+
+		# Otros casos (diferencia de elevación > 1)
+		else:
+			allowed_attacks = []
+
+		print("Tipos de ataque permitidos según posiciones de mechs:", allowed_attacks)
+
+
+		## Determinar con qué miembros puede golpear
+		body_parts = []
+
+		if "punch" in allowed_attacks:
+			# Brazo izquierdo
+			if self.has_left_arm:
+				pass
+
+
+class Actuator:
+	def __init__(self, id, code, hits, location, name, working):
+		self.id = id        # índice del actuador, relacionado con locations.#.actuator_index
+		self.code = code    # código del actuador
+		self.hits = hits    # nº de impactos
+		self.location = location  # localización (Mech.LOCATION_*)
+		self.location_name = Mech.LOCATIONS[self.location]
+		self.name = name    # Nombre
+		self.working = working  # ¿Operativo?
+
+	def __str__(self):
+		out = "{id:>2}: {code} {name:<13}  loc:{location} {location_name:<3}  operativo:{working}  impactos:{hits}".format(
+			id=self.id,
+			code=self.code,
+			name=self.name,
+			location=self.location,
+			location_name=self.location_name,
+			working=self.working,
+			hits=self.hits
+		)
+		return out
+	def __repr__(self):
+		return self.__str__()
 
 class Ammo:
 	def __init__(self, location, slot):

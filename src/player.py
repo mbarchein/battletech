@@ -336,6 +336,8 @@ class Game:
 		player_position = self.player_position
 		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
 
+		print(self.player)
+
 		actions = [
 			"0",     # nº de armas físicas
 			"BI",    # localización
