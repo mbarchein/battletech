@@ -30,7 +30,7 @@ class Mech:
 			has_right_hand, shield_left_arm, shield_left_torso, shield_left_leg, shield_right_leg, shield_right_torso,
 			shield_right_arm, shield_center_torso, shield_head, shield_back_left_torso, shield_back_right_torso,
 			shield_back_center_torso, hull_left_arm, hull_left_torso, hull_left_leg, hull_right_leg, hull_right_torso,
-			hull_right_arm, hull_center_torso, hull_head, equipped_components, num_weapons, actuators, locations,
+			hull_right_arm, hull_center_torso, hull_head, equipped_components, num_weapons, actuators, slots,
 			movement_points_walk, movement_points_run, movement_points_jump, heat_sink_type,
 			movement_walk=None, movement_run=None, movement_jump=None, num_heat_sinks_on=None, num_heat_sinks_off=None,
 			mechwarrior_wounds=None, mechwarrior_conscious=None, damaged_slots=None, shooting_locations=None,
@@ -108,7 +108,7 @@ class Mech:
 		self.equipped_components = equipped_components
 		self.num_weapons = num_weapons
 		self.actuators = actuators
-		self.locations = locations
+		self.slots = slots
 		self.movement_points_walk = movement_points_walk
 		self.movement_points_run = movement_points_run
 		self.movement_points_jump = movement_points_jump
@@ -258,15 +258,24 @@ class Mech:
 				slots = []
 
 				for _ in range(num_slots):
-					slot = {'class': readstr(f2), 'ammo_quantity': readint(f2), 'code': readint(f2), 'name': readstr(f2),
-						'component_index': readint(f2), 'actuator_index': readint(f2),
-						'critical_ammo_damage': readint(f2)}
+					slot = {
+						'slot_class': readstr(f2),
+						'ammo_quantity': readint(f2),
+						'code': readint(f2),
+						'name': readstr(f2),
+						'component': readint(f2),
+						'actuator': readint(f2),
+						'critical_ammo_damage': readint(f2)
+					}
 
-					slots.append(slot)
+					# Sustituir el código de actuador por la instancia Actuator correspondiente
+					slot['actuator'] = actuators[slot['actuator']] if slot['actuator'] != -1 else None
+
+					slots.append(Slot(**slot))
 
 				locations[location_id] = slots
 
-			mechdata['locations'] = locations
+			mechdata['slots'] = locations
 
 			# Datos de movimiento
 			mechdata['movement_points_walk'] = readint(f2)
@@ -357,6 +366,37 @@ class Actuator:
 		return out
 	def __repr__(self):
 		return self.__str__()
+
+class Slot:
+	def __init__(self, slot_class, ammo_quantity, code, name, critical_ammo_damage, component=None, actuator=None):
+		self.slot_class = slot_class
+		self.ammo_quantity = ammo_quantity
+		self.code = code
+		self.name = name
+		self.critical_ammo_damage = critical_ammo_damage
+		self.component = component
+		self.actuator = actuator
+
+	def __str__(self):
+		out = "{slot_class:<8}  ".format(slot_class=self.slot_class)
+
+		if self.slot_class != "NADA":
+			out += "{name:<13}  cod:{code}  ".format(name=self.name, code=self.code)
+
+
+		if self.slot_class=="MUNICION":
+			out += "ammo_qty:{ammo_quantity}  crit_ammo_dmg:{critical_ammo_damage}  ".format(ammo_quantity=self.ammo_quantity, critical_ammo_damage=self.critical_ammo_damage)
+
+		if self.component != -1:
+			out += "Componente:" + str(self.component)
+
+		if self.actuator:
+			out += "Operativo:{working}  Impactos:{hits}".format(working=self.actuator.working, hits=self.actuator.hits)
+
+		return out
+	def __repr__(self):
+		return self.__str__()
+
 
 class Ammo:
 	def __init__(self, location, slot):
