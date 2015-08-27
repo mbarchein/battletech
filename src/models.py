@@ -369,10 +369,7 @@ class Mech:
 
 			# Objetivo un nivel por encima
 			elif self.hextile.level + 1 == enemy.hextile.level:
-				if enemy.ground:
-					allowed_attacks = ["kick", "club"]
-				else:
-					allowed_attacks = ["punch", "club"]
+				allowed_attacks = ["punch", "club"]
 
 			# Objetivo un nivel por debajo
 			elif self.hextile.level == enemy.hextile.level + 1:
