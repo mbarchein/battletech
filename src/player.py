@@ -54,16 +54,16 @@ class Game:
 		elif self.phase == "Reaccion":
 			action = self.reaction_phase()
 		elif self.phase == "AtaqueArmas":
-			action = self.weapon_attack()
+			action = self.weapon_attack_phase()
 		elif self.phase == "AtaqueFisico":
-			action = self.phisical_attack()
+			action = self.phisical_attack_phase()
 		elif self.phase == "FinalTurno":
 			action = self.finish_round()
 		else:
 			raise ValueError("Fase de juego no reconocida: {0}".format(self.phase))
 
 		# Grabar acciones a realizar en fichero
-		filename = self.save_action(action)
+		filename = self.save_action(action, debug=True)
 		print("* Almacenado fichero de acción {0}".format(filename))
 
 
@@ -81,21 +81,35 @@ class Game:
 		print("* Mech jugador en {0} y mech enemigo en {1}".format(player_position, enemy_position))
 		print("* Puntos de movimiento: Andar {walk}, Correr {run}, Saltar {jump}".format(**self.movement_points))
 
-		# Determinar si se puede hacer un ataque a distancia o no y calcular movimiento adecuado (MovementPath)
-		if player_mech.num_weapons != 0:
-			# Moverse de manera que el mech se acerque al enemigo para hacer un ataque con armas
-			print("* El mech dispone de {0} armas".format(player_mech.num_weapons))
-			path = self.move_to_enemy_keep_weapon_range_distance()
+		# Si el mech está en el suelo, intentar levantarse
+		heading_to_enemy_position = player_position.get_position_facing_to(enemy_position)
+		if player_mech.ground and self.movement_points['walk'] >= 2:
+			action = [
+				'Andar',
+				heading_to_enemy_position.hextile.name,   # hextile destino
+				str(heading_to_enemy_position.rotation),  # heading destino
+				"False",                                  # usar MASC
+				"1",                                      # longitud del camino
+				'Levantarse',
+				str(heading_to_enemy_position.rotation)
+			]
 		else:
-			# Moverse a casilla adyacente al enemigo para ataque cuerpo a cuerpo
-			print("* El mech no dispone de armas. Preparar movimiento para ataque físico.")
-			path = self.move_to_enemy_phisical_attack_range()
+			# Determinar si se puede hacer un ataque a distancia o no y calcular movimiento adecuado (MovementPath)
+			if player_mech.num_weapons != 0:
+				# Moverse de manera que el mech se acerque al enemigo para hacer un ataque con armas
+				print("* El mech dispone de {0} armas".format(player_mech.num_weapons))
+				path = self.move_to_enemy_keep_weapon_range_distance()
+			else:
+				# Moverse a casilla adyacente al enemigo para ataque cuerpo a cuerpo
+				print("* El mech no dispone de armas. Preparar movimiento para ataque físico.")
+				path = self.move_to_enemy_phisical_attack_range()
 
-		# Generar y devolver acciones
-		if path.length == 0:
-			action = self.immobile()
-		else:
-			action = self.walk(path)
+			# Generar y devolver acciones
+			if path.length == 0:
+				action = self.immobile()
+			else:
+				action = self.walk(path)
+
 		return action
 
 	def move_to_enemy_phisical_attack_range(self):
@@ -300,7 +314,7 @@ class Game:
 		action = [ reaction ]
 		return action
 
-	def weapon_attack(self):
+	def weapon_attack_phase(self):
 		"""
 		Calcula y genera la lista de comandos para la fase de "Ataques con Armas"
 		:return: (list) lista de (str) con los comandos
@@ -328,7 +342,7 @@ class Game:
 		print("* No se realiza ataque con armas por parte del jugador {0}".format(self.player_id))
 		return actions
 
-	def phisical_attack(self):
+	def phisical_attack_phase(self):
 		"""
 		Calcula y genera la lista de comandos acciones para la fase de "Ataques Físicos"
 		:return: (list) lista de (str) con los comandos
@@ -337,18 +351,53 @@ class Game:
 		enemy = self.enemies[0]
 		enemy_position  = MechPosition(enemy.heading, enemy.hextile)
 
+		print("*Mech Jugador:")
 		print(self.player)
+		print("*Mech enemigo:")
 		print(enemy)
 
-		actions = [
-			"0",     # nº de armas físicas
-			"BI",    # localización
-			"1000",  # slot del arma física
-			"0809",  # hexágono objetivo del arma
-			"Mech",  # tipo de objetivo
-		]
+		available_hits = self.player.calculate_phisical_attack_availability(enemy)
+		action_hits = self.player.optimize_phisical_attack(available_hits)
 
-		return self.no_phisical_attack()
+		# Construir comandos de ataque
+		num_attacks = len(action_hits)
+		print("* Se van a realizar {0} ataques físicos".format(num_attacks))
+
+		if num_attacks > 0:
+			actions = [str(num_attacks)]
+
+			for location,hit in action_hits.items():
+				location_name = Mech.LOCATIONS[location]
+
+				if location in (Mech.LOCATION_LEFT_ARM, Mech.LOCATION_RIGHT_ARM):
+					location_slot = "1000"
+				elif location in (Mech.LOCATION_LEFT_LEG, Mech.LOCATION_RIGHT_LEG):
+					location_slot = "2000"
+				else:
+					raise ValueError("Localización no reconocida {0}".format(location))
+
+				target_hex = enemy.hextile.name
+				target_type = "Mech"
+
+				actions += [
+					location_name,
+					location_slot,
+					target_hex,
+					target_type
+				]
+
+				print ("* Atacar con {0} al {1} ubicado en {2}. Tirada mínima:{3}, daño estimado:{4}".format(
+					location_name,
+					target_type,
+					enemy.hextile,
+					hit['roll'],
+					hit['damage']
+				))
+
+		else:
+			actions = self.no_phisical_attack()
+
+		return actions
 
 	def no_phisical_attack(self):
 		"""

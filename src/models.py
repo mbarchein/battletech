@@ -1,3 +1,4 @@
+from math import ceil, floor
 import networkx
 import os
 import sys
@@ -308,54 +309,182 @@ class Mech:
 		f1.close()
 		return mechs
 
-	def calculate_phisical_attack(self, enemy):
-		## Determinar ataques físicos permitidos
+	def get_slot(self, location, slot_class, name):
 		"""
-		Calcula los ataques físicos que se pueden realizar contra el enemigo indicado
+		Devuelve un slot según su clase y nombre
+		:param location: ubicación en las partes del Mech
+		:param slot_class: (str) clase
+		:param name: (str) nombre
+		:return: Slot|None  slot si lo encuentra o None en caso contrario
+		:rtype: Slot
+		"""
+
+		for slot in self.slots[location]:
+			if slot.slot_class == slot_class and name == slot.name:
+				return slot
+		else:
+			return None
+
+	def calculate_phisical_attack_availability(self, enemy):
+		"""
+		Calcula los ataques físicos que se pueden realizar contra el enemigo indicado, teniendo en cuenta el estado
+		actual del mech jugador y la posición relativa con respecto al enemigo. Deveulve una diccionario con la
+		información de ataques permitidos
+
 		:type enemy: Mech
 		:param enemy: Mech  enemigo
+		:return: dict {location:{roll:(int), damage:(int)}}  ubicación del ataque, tirada mínima para impactar, daño producido
 		"""
 
-		## Determinar tipos de ataque permitidos según posiciones del jugador y del enemigo
-		if self.ground:
-			print("El jugador está en el suelo, no puede hacer ataques físicos")
-			allowed_attacks = []
+		# Lista de tipos de ataque permitidos
+		allowed_attacks = []
 
-		# Mismo nivel de elevación
-		elif self.hextile.level == enemy.hextile.level:
-			if enemy.ground:
-				allowed_attacks = ["kick"]
-			else:
-				allowed_attacks = ["punch", "kick", "club"]
+		# Comprobar que el enemigo está en una posición adyacente
+		if enemy.hextile in list(self.hextile.neighbors.values()):
 
-		# Objetivo un nivel por encima
-		elif self.hextile.level + 1 == enemy.hextile.level:
-			if enemy.ground:
-				allowed_attacks = ["kick", "club"]
-			else:
-				allowed_attacks = ["punch", "club"]
-
-		# Objetivo un nivel por debajo
-		elif self.hextile.level == enemy.hextile.level + 1:
-			if enemy.ground:
+			## Determinar tipos de ataque permitidos según posiciones del jugador y del enemigo
+			if self.ground:
+				print("El jugador está en el suelo, no puede hacer ataques físicos")
 				allowed_attacks = []
-			else:
-				allowed_attacks = ["kick", "club"]
 
-		# Otros casos (diferencia de elevación > 1)
+			# Mismo nivel de elevación
+			elif self.hextile.level == enemy.hextile.level:
+				if enemy.ground:
+					allowed_attacks = ["kick"]
+				else:
+					allowed_attacks = ["punch", "kick", "club"]
+
+			# Objetivo un nivel por encima
+			elif self.hextile.level + 1 == enemy.hextile.level:
+				if enemy.ground:
+					allowed_attacks = ["kick", "club"]
+				else:
+					allowed_attacks = ["punch", "club"]
+
+			# Objetivo un nivel por debajo
+			elif self.hextile.level == enemy.hextile.level + 1:
+				if enemy.ground:
+					allowed_attacks = []
+				else:
+					allowed_attacks = ["kick", "club"]
+
 		else:
-			allowed_attacks = []
+			print("No se puede hacer un ataque físico. La posición enemiga {0} no es adyacente a {1}".format(enemy.hextile, self.hextile))
 
 		print("Tipos de ataque permitidos según posiciones de mechs:", allowed_attacks)
 
 
 		## Determinar con qué miembros puede golpear
-		body_parts = []
+		hits = {}
 
+		check_locations={}
+		# Brazos
 		if "punch" in allowed_attacks:
-			# Brazo izquierdo
-			if self.has_left_arm:
-				pass
+			check_locations[self.LOCATION_LEFT_ARM] =  ("Hombro", "Brazo", "Antebrazo", "Mano")
+			check_locations[self.LOCATION_RIGHT_ARM] = ("Hombro", "Brazo", "Antebrazo", "Mano")
+
+		if "kick" in allowed_attacks:
+			check_locations[self.LOCATION_LEFT_LEG] =  ("Cadera", "Muslo", "Pierna", "Pie")
+			check_locations[self.LOCATION_RIGHT_LEG] =  ("Cadera", "Muslo", "Pierna", "Pie")
+
+		for location,slot_names in check_locations.items():
+			# ¿Se ha disparado algún arma en este turno?
+			if self.shooting_locations[location] != 0:
+				print("No se puede golpear con {location} porque ha realizado un ataque con armas".format(location = self.LOCATIONS[location]))
+				continue
+
+			slot_actuator_0 = self.get_slot(location, "ACTUADOR", slot_names[0])
+
+			# ¿Miembro inexistente, amputado o incapacitado? (en las piernas se comprueban las dos caderas)
+			if location == self.LOCATION_LEFT_ARM:
+				extra = not self.has_left_arm
+			elif location == self.LOCATION_RIGHT_ARM:
+				extra = not self.has_right_arm
+			elif location == self.LOCATION_LEFT_LEG:
+				slot_actuator_0_compl = self.get_slot(self.LOCATION_RIGHT_LEG, "ACTUADOR", "Cadera")
+				extra = not slot_actuator_0_compl or slot_actuator_0.actuator.damaged
+			elif location == self.LOCATION_RIGHT_LEG:
+				slot_actuator_0_compl = self.get_slot(self.LOCATION_LEFT_LEG, "ACTUADOR", "Cadera")
+				extra = not slot_actuator_0_compl or slot_actuator_0.actuator.damaged
+			else:
+				extra = True
+
+			if extra or not slot_actuator_0 or slot_actuator_0.actuator.damaged:
+				print("No se puede golpear con {location}. {name} dañado o no tiene miembro".format(
+					location = self.LOCATIONS[location],
+					name = slot_names[0]
+				))
+				continue
+
+			# Cálculo de tirada y daño base
+			if location in (self.LOCATION_LEFT_ARM, self.LOCATION_RIGHT_ARM):
+				roll = 4
+				damage = ceil(self.weight / 10)
+			else:
+				roll = 3
+				damage = ceil(self.weight / 5)
+
+			slot_actuator_1 = self.get_slot(location, "ACTUADOR", slot_names[1])
+			slot_actuator_2 = self.get_slot(location, "ACTUADOR", slot_names[2])
+			slot_actuator_3 = self.get_slot(location, "ACTUADOR", slot_names[3])
+
+			if slot_actuator_1.actuator.damaged:
+				print("Actuador {1} {0} dañado o inexistente".format(self.LOCATIONS[location], slot_names[1]))
+				roll += 2
+				damage /= 2.0
+
+			if not slot_actuator_2 or slot_actuator_2.actuator.damaged:
+				print("Actuador {1} {0} dañado o inexistente".format(self.LOCATIONS[location], slot_names[2]))
+				roll += 2
+				damage /= 2.0
+
+			if not slot_actuator_3 or slot_actuator_3.actuator.damaged:
+				print("Actuador {1} {0} dañado o inexistente".format(self.LOCATIONS[location], slot_names[3]))
+				roll += 1
+
+			damage = int(floor(damage))
+
+
+			if roll <= 12:
+				print("Es posible golpear con {location} roll:{roll} damage:{damage}".format(
+					location = self.LOCATIONS[location],
+					roll=roll,
+					damage=damage
+				))
+				hits[location] = {'roll': roll, 'damage': damage}
+			else:
+				print("No se puede golpear con {location} roll:{roll} ".format(
+					location = self.LOCATIONS[location],
+					roll=roll
+				))
+
+		return hits
+
+	def optimize_phisical_attack(self, available_attacks):
+		"""
+		Optimiza el ataque físico con respecto a una lista de posibles golpes
+		:param available_attacks: lista de tuplas (location, roll, damage)
+		:return: diccionario {location:{roll:(int), damage:(int)}}  ubicación del ataque, tirada mínima para impactar, daño producido
+		"""
+
+		optimized_hits = {}
+
+		# Golpear con los dos brazos, si es posible
+		if self.LOCATION_LEFT_ARM in available_attacks:
+			optimized_hits[self.LOCATION_LEFT_ARM] = available_attacks[self.LOCATION_LEFT_ARM]
+
+		if self.LOCATION_RIGHT_ARM in available_attacks:
+			optimized_hits[self.LOCATION_RIGHT_ARM] = available_attacks[self.LOCATION_RIGHT_ARM]
+
+
+		# Si están disponibles las dos piernas, golpear con la que tenga más probabilidades de impacto
+		if self.LOCATION_LEFT_LEG in available_attacks and self.LOCATION_RIGHT_LEG in available_attacks:
+			if available_attacks[self.LOCATION_LEFT_LEG]['roll'] <= available_attacks[self.LOCATION_RIGHT_LEG]['roll']:
+				optimized_hits[self.LOCATION_LEFT_LEG] = available_attacks[self.LOCATION_LEFT_LEG]
+			else:
+				optimized_hits[self.LOCATION_RIGHT_LEG] = available_attacks[self.LOCATION_RIGHT_LEG]
+
+		return  optimized_hits
 
 
 class Actuator:
@@ -367,6 +496,7 @@ class Actuator:
 		self.location_name = Mech.LOCATIONS[self.location]
 		self.name = name    # Nombre
 		self.working = working  # ¿Operativo?
+		self.damaged = not working # ¿Dañado? (complementario de working)
 
 	def __str__(self):
 		out = "{id:>2}: {code} {name:<13}  loc:{location} {location_name:<3}  operativo:{working}  impactos:{hits}".format(
