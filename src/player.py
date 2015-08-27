@@ -123,6 +123,10 @@ class Game:
 		enemy_position  = MechPosition(enemy_mech.heading, enemy_mech.hextile)
 		player_position = self.player_position
 
+		# Posiciones alcanzables saltando
+		jump_available_positions = self.map.hextiles_in_max_radius(player_position.hextile, self.movement_points['jump'])
+		print("* Hay {0} posiciones posibles para salto".format(len(jump_available_positions)), jump_available_positions)
+
 		candidate_positions_raw = enemy_position.surrounding_positions_facing_to_self()
 
 		# filtrar para quedarnos con aquellas posiciones que estén a una altura permitida para el ataque físico
@@ -133,10 +137,12 @@ class Game:
 		candidate_paths = self.map.paths_to_set(player_position, candidate_positions, "walk")
 		if len(candidate_paths) > 0:
 			candidate_path = candidate_paths[0]
+			path = candidate_path.longest_movement(self.movement_points['walk'])
 		else:
-			candidate_path = MovementPath(gamemap=self.map, path=[player_position], movement_type="walk")
 
-		path = candidate_path.longest_movement(self.movement_points['walk'])
+			# Generar camino de longitud 0 para quedarse inmóvil
+			candidate_path = MovementPath(gamemap=self.map, path=[player_position], movement_type="walk")
+			path = candidate_path.longest_movement(self.movement_points['walk'])
 
 		print ("* Camino más corto para ataque físico al enemigo:")
 		print(candidate_path)

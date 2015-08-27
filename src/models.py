@@ -862,14 +862,15 @@ class GameMap:
 
 	def hextiles_in_max_radius(self, hextile, radius):
 		"""
-		Obtiene todos los hextiles que se encuentran a un radio máximi r con respecto a uno dado
+		Obtiene todos los hextiles que se encuentran a un radio máximo r con respecto a uno dado
 		:return: (list) lista de hextiles
 		"""
 		G = self.adjacency_graph
-		s = hextile.name
+		s = hextile
+		#print(G.edges())
 
-		H = networkx.ego_graph(G, s, radius, center=False)
-		nodes = [self.hextile_by_name[hextile_name] for hextile_name in H.nodes()]
+		sp = networkx.single_source_shortest_path(G, s, radius)
+		nodes = [node for node in list(sp.keys())]
 		return nodes
 
 	def farthest_movemnts_possible(self, source, movement_points, movement_type):
@@ -1226,8 +1227,8 @@ class Hextile:
 	def __hash__(self):
 		return int(self.name)
 
-	def __lt__(self, other):
-		return True
+	def __eq__(self, other):
+		return self.name == other.name
 
 	def __repr__(self):
 		return self.__str__()
