@@ -120,7 +120,7 @@ class Game:
 		"""
 		player_mech = self.player
 		enemy_mech = self.enemies[0]
-		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
+		enemy_position  = MechPosition(enemy_mech.heading, enemy_mech.hextile)
 		player_position = self.player_position
 
 		candidate_positions_raw = enemy_position.surrounding_positions_facing_to_self()
