@@ -218,15 +218,30 @@ class Mech:
 			# Componentes equipados
 			num_equipped_components = readint(f2)
 			equipped_components = []
+			print("equipped_components", num_equipped_components)
 
 			for _ in range(num_equipped_components):
-				component = {'code': readint(f2), 'name': readstr(f2), 'class': readstr(f2),
-					'back_mounted': readbool(f2), 'primary_location': readint(f2), 'secondary_location': readint(f2),
-					'weapon_type': readstr(f2), 'heat': readint(f2), 'damage': readint(f2),
-					'shoots_per_round': readint(f2), 'min_range': readint(f2), 'short_range': readint(f2),
-					'medium_range': readint(f2), 'long_range': readint(f2), 'working': readbool(f2),
-					'ammo_weapon_code': readint(f2), 'quantity': readint(f2), 'special_ammo': readbool(f2),
-					'shooting_modifier': readint(f2), }
+				component = {
+					'code': readint(f2),
+					'name': readstr(f2),
+					'class': readstr(f2),
+					'back_mounted': readbool(f2),
+					'primary_location': readint(f2),
+					'secondary_location': readint(f2),
+					'weapon_type': readstr(f2),
+					'heat': readint(f2),
+					'damage': readint(f2),
+					'shoots_per_round': readint(f2),
+					'min_range': readint(f2),
+					'short_range': readint(f2),
+					'medium_range': readint(f2),
+					'long_range': readint(f2),
+					'working': readbool(f2),
+					'ammo_weapon_code': readint(f2),
+					'quantity': readint(f2),
+					'special_ammo': readbool(f2),
+					'shooting_modifier': readint(f2),
+				}
 
 				equipped_components.append(component)
 
@@ -345,7 +360,7 @@ class Mech:
 
 class Actuator:
 	def __init__(self, id, code, hits, location, name, working):
-		self.id = id        # índice del actuador, relacionado con locations.#.actuator_index
+		self.id = id        # índice del actuador (para relacionarlo con el slot correspondiente)
 		self.code = code    # código del actuador
 		self.hits = hits    # nº de impactos
 		self.location = location  # localización (Mech.LOCATION_*)

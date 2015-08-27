@@ -334,9 +334,11 @@ class Game:
 		:return: (list) lista de (str) con los comandos
 		"""
 		player_position = self.player_position
-		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
+		enemy = self.enemies[0]
+		enemy_position  = MechPosition(enemy.heading, enemy.hextile)
 
 		print(self.player)
+		print(enemy)
 
 		actions = [
 			"0",     # nº de armas físicas
