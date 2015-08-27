@@ -35,7 +35,7 @@ class Mech:
 			movement_points_walk, movement_points_run, movement_points_jump, heat_sink_type,
 			movement_walk=None, movement_run=None, movement_jump=None, num_heat_sinks_on=None, num_heat_sinks_off=None,
 			mechwarrior_wounds=None, mechwarrior_conscious=None, damaged_slots=None, shooting_locations=None,
-			ejection_ready_ammo=None
+			ejection_ready_ammo=None, last_movement=None
 	):
 
 		# Datos de mechsJ#.sbt
@@ -114,6 +114,9 @@ class Mech:
 		self.movement_points_run = movement_points_run
 		self.movement_points_jump = movement_points_jump
 		self.heat_sink_type = heat_sink_type
+
+		# Datos de mov.sbt (último movimiento realizado)
+		self.last_movement = last_movement
 
 	def __str__(self):
 		out = pprint.pformat(vars(self), indent=2)
@@ -254,7 +257,7 @@ class Mech:
 			actuators = []
 			for i in range(num_actuators):
 				actuator_data = {
-					'id': i,
+					'actuator_id': i,
 					'code': readint(f2),
 					'name': readstr(f2),
 					'location': readint(f2),
@@ -306,7 +309,18 @@ class Mech:
 			mech = Mech(mech_id=mech_id, **mechdata)
 			mechs.append(mech)
 
+		# Fin de fichero mechsJ#.sbt
 		f1.close()
+
+		# Últimas acciones de movimiento de cada Mech
+		f3 = open("mov.sbt", "r")
+		assert (readstr(f3) == "movSBT")
+		assert (readint(f3) == num_mechs)
+		for i in range (num_mechs):
+			mechs[i].last_movement = readstr(f3)
+
+		f3.close()
+
 		return mechs
 
 	def get_slot(self, location, slot_class, name):
@@ -331,7 +345,6 @@ class Mech:
 		actual del mech jugador y la posición relativa con respecto al enemigo. Deveulve una diccionario con la
 		información de ataques permitidos
 
-		:type enemy: Mech
 		:param enemy: Mech  enemigo
 		:return: dict {location:{roll:(int), damage:(int)}}  ubicación del ataque, tirada mínima para impactar, daño producido
 		"""
@@ -340,7 +353,7 @@ class Mech:
 		allowed_attacks = []
 
 		# Comprobar que el enemigo está en una posición adyacente
-		if enemy.hextile in list(self.hextile.neighbors.values()):
+		if self.hextile.is_adjacent_to(enemy.hextile):
 
 			## Determinar tipos de ataque permitidos según posiciones del jugador y del enemigo
 			if self.ground:
@@ -387,6 +400,16 @@ class Mech:
 			check_locations[self.LOCATION_LEFT_LEG] =  ("Cadera", "Muslo", "Pierna", "Pie")
 			check_locations[self.LOCATION_RIGHT_LEG] =  ("Cadera", "Muslo", "Pierna", "Pie")
 
+		# Línea de visión y cobertura (utilizada para calcular modificadores)
+		line_of_sight_and_cover = LineOfSightAndCover.calculate(
+			player_id=self.id,
+			gamemap=self.hextile.map,
+			source=self.hextile,
+			source_level_sum=self.ground == False,
+			target=enemy.hextile,
+			target_level_sum=enemy.ground==False
+		)
+
 		for location,slot_names in check_locations.items():
 			# ¿Se ha disparado algún arma en este turno?
 			if self.shooting_locations[location] != 0:
@@ -416,7 +439,7 @@ class Mech:
 				))
 				continue
 
-			# Cálculo de tirada y daño base
+			# Cálculo de tirada base y daño base
 			if location in (self.LOCATION_LEFT_ARM, self.LOCATION_RIGHT_ARM):
 				roll = 4
 				damage = ceil(self.weight / 10)
@@ -424,6 +447,10 @@ class Mech:
 				roll = 3
 				damage = ceil(self.weight / 5)
 
+			# Añadir modificadores de tirada comunes
+			roll += self.attack_modifiers(enemy, line_of_sight_and_cover)
+
+			# Añadir modificadores de tirada y ajuste de daño para ataques físicos
 			slot_actuator_1 = self.get_slot(location, "ACTUADOR", slot_names[1])
 			slot_actuator_2 = self.get_slot(location, "ACTUADOR", slot_names[2])
 			slot_actuator_3 = self.get_slot(location, "ACTUADOR", slot_names[3])
@@ -486,10 +513,93 @@ class Mech:
 
 		return  optimized_hits
 
+	def attack_modifiers(self, enemy, line_of_sight_and_cover, debug=False):
+		"""
+		Calcula modificadores a la tirada de ataque comunes tanto para ataques físicos como para ataques con armas
+		:param enemy: Mech enemigo
+		:return: int|None   modificador a la tirada o None si el jugador no puede atacar o el enemigo no puede ser impactado
+		"""
+		modifier = 1
+
+
+		# Movimiento del atacante
+		if self.last_movement == "Andar":
+			modifier += 1
+		elif self.last_movement == "Correr":
+			modifier += 2
+		elif self.last_movement == "Saltar":
+			modifier += 3
+		elif self.last_movement == "Tumbarse":
+			modifier += 2
+
+		if debug: print("modifier0 {0}".format(modifier))
+
+		# Terreno donde está el atacante
+		if self.hextile.terrain_type == Hextile.TERRAIN_TYPE_WATER:
+			if self.hextile.level == -1:
+				modifier += 1
+			elif self.hextile.level <= -2:
+				# Un Mech no puede disparar o ser atacado en un hexágono de profundidad 2 (p.73)
+				return None
+
+		if debug: print("modifier1 {0}".format(modifier))
+
+		# Terreno donde está el objetivo
+		if enemy.hextile.object_type == Hextile.OBJECT_TYPE_LIGHT_WOODS:
+			modifier += 1
+		elif enemy.hextile.object_type == Hextile.OBJECT_TYPE_HEAVY_WOODS:
+			modifier += 2
+		elif enemy.hextile.terrain_type == Hextile.TERRAIN_TYPE_WATER:
+			if enemy.hextile.level == -1:
+				modifier += -1
+			elif enemy.hextile.level <= -2:
+				# Un Mech no puede disparar o ser atacado en un hexágono de profundidad 2 (p.73)
+				return None
+
+		if debug: print("modifier2 {0}".format(modifier))
+
+		# Estado del objetivo: en el suelo
+		if enemy.ground:
+			if self.hextile.is_adjacent_to(enemy.hextile):
+				modifier += -2
+			else:
+				modifier += 1
+
+		if debug: print("modifier3 {0}".format(modifier))
+
+		# Estado del objetivo: blanco inmóvil
+		if enemy.disconnected:
+			modifier += -4
+
+		if debug: print("modifier4 {0}".format(modifier))
+
+		# Estado del objetivo: atascado en pantano
+		if enemy.swamped:
+			modifier += -2
+
+		if debug: print("modifier5 {0}".format(modifier))
+
+		# Estado del objetivo: último movimiento
+		if enemy.last_movement == "Andar":
+			modifier += 1
+		elif enemy.last_movement == "Saltar":
+			modifier += 1
+
+		if debug: print("modifier6 {0}".format(modifier))
+
+		# Cobertura parcial enemigo
+		if debug: print(line_of_sight_and_cover)
+		if line_of_sight_and_cover.has_partial_cover or enemy.hextile.terrain_type == Hextile.TERRAIN_TYPE_WATER and enemy.ground==False:
+			modifier += 3
+
+		if debug: print("modifier7 {0}".format(modifier))
+
+		return modifier
+
 
 class Actuator:
-	def __init__(self, id, code, hits, location, name, working):
-		self.id = id        # índice del actuador (para relacionarlo con el slot correspondiente)
+	def __init__(self, actuator_id, code, hits, location, name, working):
+		self.actuator_id = actuator_id        # índice del actuador (para relacionarlo con el slot correspondiente)
 		self.code = code    # código del actuador
 		self.hits = hits    # nº de impactos
 		self.location = location  # localización (Mech.LOCATION_*)
@@ -500,7 +610,7 @@ class Actuator:
 
 	def __str__(self):
 		out = "{id:>2}: {code} {name:<13}  loc:{location} {location_name:<3}  operativo:{working}  impactos:{hits}".format(
-			id=self.id,
+			id=self.actuator_id,
 			code=self.code,
 			name=self.name,
 			location=self.location,
@@ -939,26 +1049,26 @@ class GameMap:
 		## Tipo de terreno
 		################################
 		# Despejado o pavimentado
-		if target.hextile.terrain_type in (0,1):
+		if target.hextile.terrain_type in (Hextile.TERRAIN_TYPE_OPEN, Hextile.TERRAIN_TYPE_PAVEMENT):
 			cost += 1
 
 		if debug: print("cost B", source, target, cost, impossible)
 
 		# Agua
-		if target.hextile.terrain_type == 2:
+		if target.hextile.terrain_type == Hextile.TERRAIN_TYPE_WATER:
 			# Si el mech está corriendo, no puede entrar en areas con agua de profundidad 1 o mayor
 			if "running" in restrictions and target.hextile.level<0:
 				impossible = True
 
 			if target.hextile.level == -1:
 				cost += 2
-			if target.hextile.level >= -2:
+			elif target.hextile.level >= -2:
 				cost += 4
 
 		if debug: print("cost C", source, target, cost, impossible)
 
 		# Pantanoso
-		if target.hextile.terrain_type == 3:
+		if target.hextile.terrain_type == Hextile.TERRAIN_TYPE_SWAMP:
 			cost += 2
 
 		if debug: print("cost D", source, target, cost, impossible)
@@ -1032,21 +1142,29 @@ class GameMap:
 
 
 class Hextile:
-	TERRAIN_TYPES = {
-		0: "OPEN",
-		1: "PAVEMENT",
-		2: "WATER",
-		3: "SWAMP"
-	}
+	TERRAIN_TYPE_OPEN = 0
+	TERRAIN_TYPE_PAVEMENT = 1
+	TERRAIN_TYPE_WATER = 2
+	TERRAIN_TYPE_SWAMP = 3
+	TERRAIN_TYPES = ["OPEN", "PAVEMENT", "WATER", "SWAMP"]
 
+	OBJECT_TYPE_DEBRIS = 0
+	OBJECT_TYPE_LIGHT_WOODS = 1
+	OBJECT_TYPE_HEAVY_WOODS = 2
+	OBJECT_TYPE_LIGHT_BUILDING = 3
+	OBJECT_TYPE_MEDIUM_BUILDING = 4
+	OBJECT_TYPE_HEAVY_BUILDING = 5
+	OBJECT_TYPE_HARDENED_BUILDING = 6
+	OBJECT_TYPE_BUNKER = 7
+	OBJECT_TYPE_NONE = 255
 	OBJECT_TYPES = {
 		0: "DEBRIS",
-		1: "LIGHT FOREST",
-		2: "DENSE FOREST",
+		1: "LIGHT WOODS",
+		2: "HEAVY WOODS",
 		3: "LIGHT BUILDING",
 		4: "MEDIUM BUILDING",
 		5: "HEAVY BUILDING",
-		6: "REINFORCER BUILDING",
+		6: "HARDENED BUILDING",
 		7: "BUNKER",
 		255: "NONE"
 	}
@@ -1111,6 +1229,14 @@ class Hextile:
 
 	def __repr__(self):
 		return self.__str__()
+
+	def is_adjacent_to(self, target_hextile):
+		"""
+		Comprueba si el Hextile actual es adyacente a otro dado
+		:param target_hextile: Hextile con el que se va a comparar
+		:rtype : bool
+		"""
+		return target_hextile in list(self.neighbors.values())
 
 
 class MechPosition:
@@ -1405,7 +1531,7 @@ class LineOfSightAndCover:
 	def calculate_real(cls, player_id, gamemap, source, source_level_sum, target, target_level_sum, debug=False):
 		"""
 		Obtiene el cálculo de la línea de visión y cobertura
-		:param player_id: (int)  identificador del jugador
+		:param player_id:        (int)  identificador del jugador
 		:param gamemap:          (GameMap) mapa de juego asociado
 		:param source:           (str) casilla de origen
 		:param source_level_sum: (bool) True para sumar 1 a la elevación de origen
