@@ -131,10 +131,10 @@ class Game:
 		print("* Posiciones interesantes para ataque físico:", candidate_positions)
 
 		candidate_paths = self.map.paths_to_set(player_position, candidate_positions, "walk")
-		if candidate_paths[0]:
+		if len(candidate_paths) > 0:
 			candidate_path = candidate_paths[0]
 		else:
-			candidate_path = MovementPath(gamemap=self.map, path=[], movement_type="walk")
+			candidate_path = MovementPath(gamemap=self.map, path=[player_position], movement_type="walk")
 
 		path = candidate_path.longest_movement(self.movement_points['walk'])
 

@@ -899,7 +899,12 @@ class GameMap:
 		:param movement_type: (str) tipo de movimiento ("walk" o "run")
 		:return: (list)  lista de MovementPath ordenada, con caminos más cortos primero
 		"""
-		paths = [self.best_path(source, target, movement_type) for target in targets]
+		paths = []
+		for target in targets:
+			path = self.best_path(source, target, movement_type)
+			if path:
+				paths.append(path)
+
 		paths.sort()
 		return paths
 
