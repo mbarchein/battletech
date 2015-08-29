@@ -1175,6 +1175,13 @@ class GameMap:
 		## Resultado
 		if impossible:
 			cost = None
+		else:
+			## AVISO: DEBIDO A UN BUG DEL SIMULADOR, ESTA REGLA NO SE APLICA. ESTO PERMITE RECORRER SUPERFICIES DE
+			##        AGUA CON NIVEL >= 0 SIN COSTE DE MOVIMIENTO BASE, LO CUAL ES UNA VENTAJA PARA EL JUGADOR
+			##
+			# Al menos debe haber un coste de 1 PM por Hextile
+			#cost = max(1,cost)
+			pass
 
 		if debug: print("cost H", source, target, cost, impossible)
 
