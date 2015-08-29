@@ -128,7 +128,7 @@ class Mech:
 		Parsea los ficheros con la información de los Mechs
 		:rtype : list[Mech]
 		"""
-		f1 = open("mechsJ{0}.sbt".format(player_id), "r")
+		f1 = open("mechsJ{0}.sbt".format(player_id), "r", encoding="latin-1")
 		assert (readstr(f1) == "mechsSBT")
 		mechs = []
 		num_mechs = readint(f1)
@@ -175,7 +175,7 @@ class Mech:
 			mechdata['inarc'] = [readbool(f1) for _ in range(0, num_mechs)]
 
 			# Parsear fichero defmechJ#.sbt
-			f2 = open("defmechJ{0}-{1}.sbt".format(player_id, mech_id), "r")
+			f2 = open("defmechJ{0}-{1}.sbt".format(player_id, mech_id), "r", encoding="latin-1")
 
 			# encabezado con magic number
 			assert (readstr(f2) == "defmechSBT")
@@ -243,10 +243,12 @@ class Mech:
 					'working': readbool(f2),
 					'ammo_weapon_code': readint(f2),
 					'quantity': readint(f2),
-					'special_ammo': readbool(f2),
+					'special_ammo': readstr(f2),
 					'shooting_modifier': readint(f2),
 				}
 
+				assert (component['class'] in ('NADA','ARMA','MUNICION','EQUIPO','ACTUADOR','ARMADURA','ARMAFISICA'))
+				assert (component['weapon_type'] in ('Nada', 'Energía','Balística', 'Misiles'))
 				equipped_components.append(component)
 
 			mechdata['equipped_components'] = equipped_components
@@ -313,7 +315,7 @@ class Mech:
 		f1.close()
 
 		# Últimas acciones de movimiento de cada Mech
-		f3 = open("mov.sbt", "r")
+		f3 = open("mov.sbt", "r", encoding="latin-1")
 		assert (readstr(f3) == "movSBT")
 		assert (readint(f3) == num_mechs)
 		for i in range (num_mechs):
@@ -965,7 +967,7 @@ class GameMap:
 	def parsefile(cls, player_id):
 		# Fichero con mapa para jugador actual
 		filename = "mapaJ{0}.sbt".format(player_id)
-		f = open(filename, "r")
+		f = open(filename, "r", encoding="latin-1")
 
 		# encabezado con magic number
 		assert(readstr(f) == "mapaSBT")
@@ -1118,7 +1120,7 @@ class GameMap:
 
 			if target.hextile.level == -1:
 				cost += 2
-			elif target.hextile.level >= -2:
+			elif target.hextile.level <= -2:
 				cost += 4
 
 		if debug: print("cost C", source, target, cost, impossible)
@@ -1680,7 +1682,7 @@ class LineOfSightAndCover:
 
 		# Parsear fichero con resultado
 		output_file = os.path.join(executable_dir, "LDV.sbt")
-		f = open(output_file, "r")
+		f = open(output_file, "r", encoding="latin-1")
 
 		# Calcular lista de Hextiles de la linea de visión
 		path_str = readstr(f)
@@ -1729,7 +1731,7 @@ class Initiative:
 	def parsefile(cls, player_id):
 		# Fichero con datos de iniciativa
 
-		f = open("iniciativaJ{0}.sbt".format(player_id), "r")
+		f = open("iniciativaJ{0}.sbt".format(player_id), "r", encoding="latin-1")
 		num_players = readint(f)
 		initiative = [readint(f) for _ in range(num_players)]
 		f.close()

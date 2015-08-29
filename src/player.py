@@ -173,7 +173,7 @@ class Game:
 					break
 			else:
 				jump_path = None
-	
+
 			########################################################
 			## Andar
 			########################################################
@@ -192,7 +192,7 @@ class Game:
 		########################################################
 		## Decidir movimiento ***dependiendo del calor restante
 		########################################################
-		if jump_path and (jump_path.heat + player_mech.heat ) < ( 10 + player_mech.num_heat_sinks_on ):
+		if jump_path and (jump_path.heat + player_mech.heat ) < ( 4 + player_mech.num_heat_sinks_on ):
 			path = jump_path
 			print ("* Elegida opción 'Saltar'. Camino:", path)
 		elif walk_path:
@@ -221,8 +221,7 @@ class Game:
 		# su radio de movimiento
 		estimated_enemy_movement_points = enemy_mech.movement_points_walk
 		estimated_enemy_farthest_movement_positions = self.map.farthest_movements_possible(enemy_position, estimated_enemy_movement_points, "walk")
-		print("* El enemigo podría desplazarse a cualquiera de estas {0} posiciones con {1} puntos de movimiento".format(len(estimated_enemy_farthest_movement_positions), estimated_enemy_movement_points))
-		print(estimated_enemy_farthest_movement_positions)
+		print("* El enemigo podría desplazarse a cualquiera de estas {0} posiciones con {1} puntos de movimiento:".format(len(estimated_enemy_farthest_movement_positions), estimated_enemy_movement_points), estimated_enemy_farthest_movement_positions)
 
 		# Modificar cada una de las posiciones de la nube para que todas "encaren" a la posición actual del enemigo, ya
 		# que estas posiciones se utilizarán como posibles puntos de destino para el movimiento de nuestro jugador
@@ -232,8 +231,7 @@ class Game:
 			if position.hextile != enemy_position.hextile:
 				estimated_enemy_farthest_movement_positions_heading_to_enemy.add(position.get_position_facing_to(enemy_position))
 
-		print("* Posiciones destino la nube de movimientos de el enemigo candidatas con encaramiento hacia enemigo: {0} ".format(len(estimated_enemy_farthest_movement_positions_heading_to_enemy)))
-		print(estimated_enemy_farthest_movement_positions_heading_to_enemy)
+		print("* Hay {0} posiciones destino de la nube de movimientos de el enemigo candidatas (con encaramiento hacia enemigo):".format(len(estimated_enemy_farthest_movement_positions_heading_to_enemy)), estimated_enemy_farthest_movement_positions_heading_to_enemy)
 
 		# Buscar los que quedan más cerca de la nube de destinos del enemigo con respecto a la posción del jugador en
 		# términos de coste de movimiento
@@ -351,7 +349,7 @@ class Game:
 		"""
 		filename = "accionJ{0}.sbt".format(self.player_id)
 		out = "\n".join(action) + "\n"
-		f = open(filename, "w")
+		f = open(filename, "w", encoding="latin-1")
 		f.write(out)
 		f.close()
 		if debug:
