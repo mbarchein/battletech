@@ -1,4 +1,4 @@
-DEBUG = False
+DEBUG_FILE_OPERATIONS = False
 
 def readbool(fd) -> bool:
 	"""
@@ -7,13 +7,13 @@ def readbool(fd) -> bool:
 	:param fd: descriptor de fichero abierto
 	"""
 	line = fd.readline().rstrip("\n")
-	if DEBUG: print(line)
+	if DEBUG_FILE_OPERATIONS: print(line)
 
-	line = line.lower()
+	linel = line.lower()
 
-	if line in ("sí", "si", "true"):
+	if linel in ("sí", "si", "true"):
 		return True
-	elif line in ("no", "false"):
+	elif linel in ("no", "false"):
 		return False
 	else:
 		raise ValueError("Se esperaba la cadena de texto 'True' o 'False' y se leyó '{0}'".format(line))
@@ -25,7 +25,7 @@ def readint(fd) -> int:
 	:param fd: descriptor de fichero abierto
 	"""
 	line = fd.readline().rstrip("\n")
-	if DEBUG: print(line)
+	if DEBUG_FILE_OPERATIONS: print(line)
 
 	return int(line)
 
@@ -36,7 +36,7 @@ def readstr(fd) -> str:
 	:param fd: descriptor de fichero abierto
 	"""
 	line = fd.readline().rstrip("\n")
-	if DEBUG: print(line)
+	if DEBUG_FILE_OPERATIONS: print(line)
 
 	return line
 
