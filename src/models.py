@@ -24,7 +24,7 @@ class Mech:
 	LOCATIONS = ["BI", "TI", "PI", "PD", "TD", "BD", "TC", "CAB", "TIa", "TDa", "TCa"]
 
 	def __init__(self,
-			mech_id, active, disconnected, swamped, ground, hextile, heading, torso_heading, temperature, on_fire,
+			mech_id, active, disconnected, swamped, ground, hextile, heading, torso_heading, heat, on_fire,
 			has_club, club_type, shield, hull, narc, inarc, name, model, weight, power, num_internal_heat_sinks,
 			num_heat_sinks, has_masc, dacmtd, dacmti, dacmtc, max_heat_generated, has_arms, has_left_shoulder,
 			has_left_arm, has_left_forearm, has_left_hand, has_right_shoulder, has_right_arm, has_right_forearm,
@@ -47,7 +47,7 @@ class Mech:
 		self.hextile = hextile
 		self.heading = heading
 		self.torso_heading = torso_heading
-		self.temperature = temperature
+		self.heat = heat
 		self.on_fire = on_fire
 		self.has_club = has_club
 		self.club_type = club_type
@@ -145,7 +145,7 @@ class Mech:
 			mechdata['hextile'] = readstr(f1)
 			mechdata['heading'] = readint(f1)
 			mechdata['torso_heading'] = readint(f1)
-			mechdata['temperature'] = readint(f1)
+			mechdata['heat'] = readint(f1)
 			mechdata['on_fire'] = readbool(f1)
 			mechdata['has_club'] = readbool(f1)
 			mechdata['club_type'] = readint(f1)
@@ -399,7 +399,6 @@ class Mech:
 
 		# Línea de visión y cobertura (utilizada para calcular modificadores)
 		line_of_sight_and_cover = LineOfSightAndCover.calculate(
-			player_id=self.id,
 			gamemap=self.hextile.map,
 			source=self.hextile,
 			source_level_sum=self.ground == False,
@@ -666,11 +665,15 @@ class Ammo:
 
 
 class GameMap:
-	def __init__(self, mapdata):
+	def __init__(self, mapdata, filename=None):
 		"""
 		Inicializa el mapa de juego
+		:param filename: str nombre de fichero que se ha utilizado para generar este mapa
 		:param mapdata: mapa de juego (diccionario a tres niveles)
 		"""
+
+		# Nombre de fichero de este mapa
+		self.filename = filename
 
 		# Lista bidimensional con los Hextiles del mapa. Las coordenadas son enteros 1..ancho x 1..alto
 		self.hextile_by_coord = mapdata
@@ -682,7 +685,7 @@ class GameMap:
 		self.movement_graph = {}   # se inicializa más adelante
 
 		# Grafo de Hextile con adyacencias simples de Hextile
-		self.adjacency_graph = None # se inicializa más adelante
+		self.hextile_adjacency_graph = None # se inicializa más adelante
 
 		# Anchura y altura del mapa
 		self.width = len(mapdata)
@@ -700,7 +703,8 @@ class GameMap:
 		self.movement_graph['run'] = self._run_map()
 
 		# Construir grafo de adyacencias simples de Hextiles
-		self.adjacency_graph = self._hextile_adjacency_graph()
+		self.hextile_adjacency_graph = self._hextile_adjacency_graph()
+		self.hextile_adjacency_graph_alt = self._hextile_adjacency_graph_alt()
 
 	def __str__(self):
 		out = []
@@ -713,7 +717,8 @@ class GameMap:
 	def _hextile_adjacency_graph(self):
 		"""
 		Genera un grafo de adyacencias entre Hextiles, se usa para calcular radios y casillas "interesantes" para
-		movimientos, así como rotaciones óptimas. Los nodos del grafo son los nombres de los Hextiles
+		movimientos, así como rotaciones óptimas. Los nodos del grafo son los Hextiles y los arcos indican las adyacencias
+		entre parejas
 		:return: (Graph) Grafo no dirigido de adyacencias entre Hextiles
 		"""
 		G = networkx.Graph()
@@ -722,6 +727,22 @@ class GameMap:
 				# Añadir arco entre nodos. Para este grafo, cada nodo estará separado de cualquiera de sus vecinos por
 				# una distancia de 1
 				G.add_edge(hextile, neighbor)
+
+		return G
+
+	def _hextile_adjacency_graph_alt(self):
+		"""
+		Genera un grafo de adyacencias entre Hextiles, se usa para calcular radios y casillas "interesantes" para
+		movimientos, así como rotaciones óptimas. Los nodos del grafo son los nombres de los Hextiles y los arcos indican
+		las adyacencias entre parejas
+		:return: (Graph) Grafo no dirigido de adyacencias entre Hextiles
+		"""
+		G = networkx.Graph()
+		for hextile in self.hextile_by_name.values():
+			for neighbor in hextile.neighbors.values():
+				# Añadir arco entre nodos. Para este grafo, cada nodo estará separado de cualquiera de sus vecinos por
+				# una distancia de 1
+				G.add_edge(hextile.name, neighbor.name, weight=1)
 
 		return G
 
@@ -835,16 +856,21 @@ class GameMap:
 			G.add_edge(v, u, weight=self.movement_cost(v, u), action="Izquierda")
 
 
-	def best_path(self, source, target, movement_type, debug=False):
+	def best_movement_path(self, source, target, movement_type, debug=False):
 		"""
 		Obtiene el mejor camino entre dos puntos del grafo de movimientos para el tipo de movimiento indicado. Utiliza
-		el algoritmo A* para examinar los grafos de movimientos permitidos
+		el algoritmo A* para examinar los grafos de movimientos permitidos. El tipo de movimiento. Puede ser "walk" o
+		"run"
 		:param source: (MechPosition) posición de inicio
 		:param target: (MechPosition) posición destino
 		:param movement_type: (str) tipo de movimiento. Puede ser "walk" o "run"
 		:param debug: (bool) si es True, se muestra información de depuración por la salida estándar
 		:return: (MovementPath) Ruta entre source y target
 		"""
+
+		if movement_type not in ("walk", "run"):
+			raise ValueError("El movimiento {0} no es válido".format(movement_type))
+
 		action = "Andar" if movement_type=="walk" else "Correr"
 
 		try:
@@ -862,18 +888,19 @@ class GameMap:
 
 	def hextiles_in_max_radius(self, hextile, radius):
 		"""
-		Obtiene todos los hextiles que se encuentran a un radio máximo r con respecto a uno dado
+		Obtiene todos los hextiles que se encuentran a un radio máximo r con respecto a uno dado, excluyendo el propio
+		Hextile indicado como parámetro
 		:return: (list) lista de hextiles
 		"""
-		G = self.adjacency_graph
-		s = hextile
-		#print(G.edges())
+		# Por algún motivo (¿bug?), networkx.ego_graph() da un error de recursión infinita con el grafo de Hextiles
+		# adyacentes y hay que usar este otro de nombres de hextiles adyacentes.
+		G = self.hextile_adjacency_graph_alt
+		H = networkx.ego_graph(G, hextile.name, radius, center=False)
+		nodes = [ self.hextile_by_name[name] for name in H.nodes() ]
 
-		sp = networkx.single_source_shortest_path(G, s, radius)
-		nodes = [node for node in list(sp.keys())]
 		return nodes
 
-	def farthest_movemnts_possible(self, source, movement_points, movement_type):
+	def farthest_movements_possible(self, source, movement_points, movement_type):
 		"""
 		Devuelve una lista de los todos los hextiles a los que se puede llegar desde el origen gastando como máximo
 		el número de puntos de movimiento indicados y realizando el tipo de movimiento 'movement_type'
@@ -891,20 +918,45 @@ class GameMap:
 
 		return s
 
-	def paths_to_set(self, source, targets, movement_type):
+	def movements_paths_to_set(self, source, targets, movement_type):
 		"""
-		Computa todas las distancias desde source a cada uno de los targets y devuelve una lista ordenada según longitud
-		de los caminos, con el más corto primero.
+		Computa todas las distancias para un movimiento de tipo "walk" o "run" desde source a cada uno de los targets y
+		devuelve una lista ordenada según longitud de los caminos, con el más corto primero.
 		:param source: (MechPosition) posición de inicio
 		:param targets: (set) conjunto de MechPositions a analizar
 		:param movement_type: (str) tipo de movimiento ("walk" o "run")
 		:return: (list)  lista de MovementPath ordenada, con caminos más cortos primero
 		"""
+		if movement_type not in ("walk", "run"):
+			raise ValueError("El movimiento {0} no es válido".format(movement_type))
+
 		paths = []
 		for target in targets:
-			path = self.best_path(source, target, movement_type)
+			path = self.best_movement_path(source, target, movement_type)
 			if path:
 				paths.append(path)
+
+		paths.sort()
+		return paths
+
+	def jump_paths_to_set(self, source, targets):
+		"""
+		Computa todas las distancias para un movimiento de tipo "jump" desde source a cada uno de los targets y
+		devuelve una lista ordenada según longitud de los caminos, con el más corto primero.
+		:type targets: list[Hextile]
+		:param source: (Hextile) posición de inicio
+		:param targets: (list) conjunto de Hextiles a analizar
+		:return: (list)  lista de MovementPath ordenada, con caminos más cortos primero
+		:rtype: list[MovementPath]
+		"""
+
+		paths = []
+		for target in targets:
+			try:
+				distance = networkx.astar_path_length(self.hextile_adjacency_graph, source, target)
+				paths.append(MovementPath(self, [source, target], "jump", jump_distance=distance))
+			except networkx.NetworkXNoPath:
+				pass
 
 		paths.sort()
 		return paths
@@ -912,7 +964,8 @@ class GameMap:
 	@classmethod
 	def parsefile(cls, player_id):
 		# Fichero con mapa para jugador actual
-		f = open("mapaJ{0}.sbt".format(player_id), "r")
+		filename = "mapaJ{0}.sbt".format(player_id)
+		f = open(filename, "r")
 
 		# encabezado con magic number
 		assert(readstr(f) == "mapaSBT")
@@ -995,7 +1048,7 @@ class GameMap:
 		f.close()
 
 		# Construir y devolver instancia del mapa
-		gamemap = GameMap(mapdata=mapinfo)
+		gamemap = GameMap(filename=filename, mapdata=mapinfo)
 
 		# Actualizar información de los hextiles para que tengan asociado el gamemap recién creado
 		for _,hextile in gamemap.hextile_by_name.items():
@@ -1335,7 +1388,7 @@ class MechPosition:
 		# Se calcula la ruta mínima teniendo en cuenta únicamente la topología de los Hextiles (sin restricciones al
 		# movimiento) y se comprueba en qué encaramiento aparece la segunda componente del camino generado (la que
 		# sucede al Hextile "source". Este encaramiento es el que necesitamos
-		G = source.map.adjacency_graph
+		G = source.map.hextile_adjacency_graph
 		path = networkx.astar_path(G, source, target)
 
 		if debug: print(path)
@@ -1402,15 +1455,21 @@ class MovementPath:
 	"""
 	Clase que encapsula un "Camino" o ruta a través de un grafo de movimiento ('aka' grafo de distancias)
 	"""
-	def __init__(self, gamemap, path, movement_type):
+	def __init__(self, gamemap, path, movement_type, jump_distance=None):
 		# Mapa asociado
+		"""
+		Constructor
+
+		:param gamemap: Mapa al que pertenece este movimiento
+		:param path: camino. Puede ser una lista de MechPosition ("walk", "run") o de Hextile ("jump")
+		:param movement_type: cadena con el tipo de movimiento ("walk", "run", "jump")
+		:param jump_distance: si es un salto, se puede indicar la distancia saltada. Si no se indica, se calcula
+		:type gamemap: GameMap
+		"""
 		self.map = gamemap
 
 		# Recorrido que se sigue. Es una lista de tuplas (rot, hextile)
 		self.path = path
-
-		# Grafo de movimiento asociado al recorrido
-		self.graph = gamemap.movement_graph[movement_type]
 
 		# Tipo de movimiento asociado ("walk" o "run")
 		self.movement_type = movement_type
@@ -1425,12 +1484,34 @@ class MovementPath:
 		# Coste del movimiento a través de 'path'
 		self.cost = None
 
-		# Calcular coste del camino
-		accum = 0
-		for i in range(0, len(path)-1):
-			edge = self.map.get_edge_data(self.graph, path[i], path[i+1])
-			accum += edge['weight']
-		self.cost = accum
+		# Calor generado
+		if movement_type == "walk":
+			self.heat = 1
+		elif movement_type == "run":
+			self.heat = 2
+		elif movement_type == "jump":
+			# Distancia lineal del salto
+			if jump_distance is None:
+				jump_distance = networkx.astar_path_length(self.map.hextile_adjacency_graph, self.source, self.target)
+
+			# El calor generado equivale a la distancia lineal del salto, con un mínimo de 3 unidades de calor generadas
+			self.heat = max(3, jump_distance)
+
+		if movement_type in ("walk", "run"):
+			# Grafo de movimiento asociado al recorrido "walk" o "run"
+			graph = gamemap.movement_graph[movement_type]
+			self.graph = graph
+
+			# Calcular coste del camino "walk" o "run"
+			accum = 0
+			for i in range(0, len(path)-1):
+				edge = self.map.get_edge_data(graph, path[i], path[i+1])
+				accum += edge['weight']
+			self.cost = accum
+		else:
+			# Movimiento "jump"
+			self.graph = None
+			self.cost = jump_distance
 
 	def __lt__(self, other):
 		return self.cost < other.cost
@@ -1441,6 +1522,26 @@ class MovementPath:
 	def __eq__(self, other):
 		return self.cost == other.cost
 
+	def __str__(self):
+		"""
+		Imprime por la salida la información de una ruta
+		:return:
+		"""
+		path = self.path
+		graph = self.graph
+
+		out = ["Inicio:{0} final:{1} PM:{2} Calor:{3}".format(path[0], path[-1], self.cost, self.heat)]
+
+		if self.movement_type in ("walk", "run"):
+			accum = 0
+
+			for i in range(0, len(path)-1):
+				target = path[i+1]
+				edge = self.map.get_edge_data(graph,path[i],path[i+1])
+				accum += edge['weight']
+				out.append("acción {0} | coste acumulado {1} | {2} a {3}, coste {4}".format(i+1, accum, edge['action'], target, edge['weight']))
+
+		return "\n".join(out)
 
 	def longest_movement(self, movement_points):
 		# Calcular máximo movimiento posible mediante la acción "Andar"
@@ -1469,25 +1570,28 @@ class MovementPath:
 		movement = MovementPath(self.map, subpath, self.movement_type)
 		return movement
 
-	def __str__(self):
+	def is_jump_possible(self, movement_points):
 		"""
-		Imprime por la salida la información de una ruta
-		:return:
+		Calcula si un salto es posible teniendo en cuenta una determinada cantidad de puntos de salto
+		:param movement_points: int  número de puntos de movimiento disponibles
+		:return: bool  True si el salto es posible o False en caso contrario
 		"""
-		path = self.path
-		graph = self.graph
+		line_of_sight_and_cover = LineOfSightAndCover.calculate(self.map, self.source, True, self.target, True)
+		full_path = line_of_sight_and_cover.path[::1] + [ self.target ]
+		for i in range(len(full_path)):
+			if full_path[i].level - self.source.level > movement_points:
+				allowed = False
+				print("No se puede saltar la casilla {0} con altura {1} desde {2} (altura {3})".format(
+					full_path[i],
+					full_path[i].level,
+					self.source,
+					self.source.level
+				))
+				break
+		else:
+			allowed = True
 
-		out = ["Recorrido con posición de inicio {0} y posición final {1}".format(path[0], path[-1])]
-		accum = 0
-
-		for i in range(0, len(path)-1):
-			target = path[i+1]
-			edge = self.map.get_edge_data(graph,path[i],path[i+1])
-			accum += edge['weight']
-			out.append("acción {0} | coste acumulado {1} | {2} a {3}, coste {4}".format(i+1, accum, edge['action'], target, edge['weight']))
-
-		out.append("coste total del camino: {0}. Número de acciones necesarias: {1}".format(self.cost, len(path)-1))
-		return "\n".join(out)
+		return allowed
 
 
 class LineOfSightAndCover:
@@ -1496,6 +1600,15 @@ class LineOfSightAndCover:
 	"""
 
 	def __init__(self, source, target, path, has_line_of_sight, has_partial_cover):
+		"""
+		Constructor
+		:type target: list[Hextile]
+		:param source: Hextile origen
+		:param target: Hextile destino
+		:param path: list[Hextile] hextiles intermedios
+		:param has_line_of_sight: bool ¿hay línea de vision?
+		:param has_partial_cover: bool ¿el objetivo tiene cobertura parcial?
+		"""
 		self.source = source
 		self.target = target
 		self.path = path
@@ -1503,10 +1616,9 @@ class LineOfSightAndCover:
 		self.has_partial_cover = has_partial_cover
 
 	@classmethod
-	def calculate(cls, player_id, gamemap, source, source_level_sum, target, target_level_sum, debug=False):
+	def calculate(cls, gamemap, source, source_level_sum, target, target_level_sum, debug=False):
 		"""
 		Obtiene el cálculo de la línea de visión y cobertura
-		:param player_id: (int)  identificador del jugador
 		:param gamemap:          (GameMap) mapa de juego asociado
 		:param source:           (Hextile)|(MechPosition)|(str) casilla de origen
 		:param source_level_sum: (bool) True para sumar 1 a la elevación de origen
@@ -1526,15 +1638,14 @@ class LineOfSightAndCover:
 		if type(target) == MechPosition:
 			target = target.hextile.name
 
-		return cls.calculate_real(player_id, gamemap, source, source_level_sum, target, target_level_sum, debug)
+		return cls.calculate_real(gamemap, source, source_level_sum, target, target_level_sum, debug)
 
 
 	@classmethod
 	@memoize
-	def calculate_real(cls, player_id, gamemap, source, source_level_sum, target, target_level_sum, debug=False):
+	def calculate_real(cls, gamemap, source, source_level_sum, target, target_level_sum, debug=False):
 		"""
 		Obtiene el cálculo de la línea de visión y cobertura
-		:param player_id:        (int)  identificador del jugador
 		:param gamemap:          (GameMap) mapa de juego asociado
 		:param source:           (str) casilla de origen
 		:param source_level_sum: (bool) True para sumar 1 a la elevación de origen
@@ -1548,7 +1659,7 @@ class LineOfSightAndCover:
 
 		cmd = [
 			executable_file,
-			"mapaJ{0}.sbt".format(player_id),
+			gamemap.filename,
 			source,
 			"1" if source_level_sum else "0",
 			target,
