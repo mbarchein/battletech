@@ -118,6 +118,18 @@ class Mech:
 		# Datos de mov.sbt (último movimiento realizado)
 		self.last_movement = last_movement
 
+		# Preparar listas de armas y municiones
+		self.weapons = []
+		self.ammo = []
+
+		# Clasificar entre armamento y munición
+		for component in self.equipped_components:
+			if component.component_class == "ARMA":
+				self.weapons.append(component)
+			elif component.component_class == "MUNICION":
+				self.ammo.append(component)
+
+
 	def __str__(self):
 		out = pprint.pformat(vars(self), indent=2)
 		return out
@@ -225,10 +237,10 @@ class Mech:
 			print("equipped_components", num_equipped_components)
 
 			for _ in range(num_equipped_components):
-				component = {
+				component_data = {
 					'code': readint(f2),
 					'name': readstr(f2),
-					'class': readstr(f2),
+					'component_class': readstr(f2),
 					'back_mounted': readbool(f2),
 					'primary_location': readint(f2),
 					'secondary_location': readint(f2),
@@ -242,13 +254,14 @@ class Mech:
 					'long_range': readint(f2),
 					'working': readbool(f2),
 					'ammo_weapon_code': readint(f2),
-					'quantity': readint(f2),
+					'ammo_quantity': readint(f2),
 					'special_ammo': readstr(f2),
 					'shooting_modifier': readint(f2),
 				}
 
-				assert (component['class'] in ('NADA','ARMA','MUNICION','EQUIPO','ACTUADOR','ARMADURA','ARMAFISICA'))
-				assert (component['weapon_type'] in ('Nada', 'Energía','Balística', 'Misiles'))
+				assert (component_data['component_class'] in ('NADA','ARMA','MUNICION','EQUIPO','ACTUADOR','ARMADURA','ARMAFISICA'))
+				assert (component_data['weapon_type'] in ('Nada', 'Energía','Balística', 'Misiles'))
+				component = Component(**component_data)
 				equipped_components.append(component)
 
 			mechdata['equipped_components'] = equipped_components
@@ -650,6 +663,65 @@ class Slot:
 	def __repr__(self):
 		return self.__str__()
 
+class Component:
+	"""
+	Clase para representar los componentes equipados en el Mech
+	"""
+
+	def __init__(self, code, name,  component_class, primary_location, secondary_location, working,
+			weapon_type, back_mounted, damage, heat, min_range, short_range, medium_range, long_range,
+			shooting_modifier, shoots_per_round, ammo_weapon_code, ammo_quantity, special_ammo
+	):
+		self.ammo_weapon_code  = ammo_weapon_code
+		self.back_mounted  = back_mounted
+		self.component_class  = component_class
+		self.code  = code
+		self.damage  = damage
+		self.heat  = heat
+		self.long_range  = long_range
+		self.medium_range  = medium_range
+		self.min_range  = min_range
+		self.name  = name
+		self.primary_location  = primary_location
+		self.ammo_quantity  = ammo_quantity
+		self.secondary_location  = secondary_location
+		self.shooting_modifier  = shooting_modifier
+		self.shoots_per_round  = shoots_per_round
+		self.short_range  = short_range
+		self.special_ammo  = special_ammo
+		self.weapon_type  = weapon_type
+		self.working = working
+
+	def __str__(self):
+		out = "{0:<9} ".format(self.component_class)
+
+		if self.primary_location != -1:
+			out += "{0} ".format(Mech.LOCATIONS[self.primary_location])
+
+		if self.secondary_location != -1:
+			out += "{0} ".format(Mech.LOCATIONS[self.secondary_location])
+
+		if self.component_class != "NADA":
+			out += "{name:<15} #{code:<4} ".format(name=self.name, code=self.code)
+
+		if self.component_class=="ARMA":
+			out += "{weapon_type:<9} ".format(weapon_type=self.weapon_type)
+			out += "mod:{0} spr:{1:<2} ".format(self.shooting_modifier, self.shoots_per_round)
+			out += "dmg:{0:<2} heat:{1} ".format(self.damage, self.heat)
+			out += "min:{0} sR:{1} mR:{2:<2} lR:{3:<2} ".format(self.min_range, self.short_range, self.medium_range, self.long_range)
+
+		if self.component_class=="MUNICION":
+			out += "qty: {ammo_quantity:<2} ".format(ammo_quantity=self.ammo_quantity)
+			out += "esp:{0:<5} ".format(self.special_ammo)
+			out += "wpn:#{0} ".format(self.ammo_weapon_code)
+
+		out += "wrk:{working}  ".format(working=self.working)
+
+
+		return out
+
+	def __repr__(self):
+		return self.__str__()
 
 class Ammo:
 	def __init__(self, location, slot):
@@ -1180,7 +1252,7 @@ class GameMap:
 			##        AGUA CON NIVEL >= 0 SIN COSTE DE MOVIMIENTO BASE, LO CUAL ES UNA VENTAJA PARA EL JUGADOR
 			##
 			# Al menos debe haber un coste de 1 PM por Hextile
-			#cost = max(1,cost)
+			cost = max(1,cost)
 			pass
 
 		if debug: print("cost H", source, target, cost, impossible)
@@ -1493,11 +1565,17 @@ class MovementPath:
 		# Coste del movimiento a través de 'path'
 		self.cost = None
 
-		# Calor generado
+		# Calor generado por el movimiento
 		if movement_type == "walk":
-			self.heat = 1
+			if self.length > 0:
+				self.heat = 1
+			else:
+				self.heat = 0
 		elif movement_type == "run":
-			self.heat = 2
+			if self.length > 0:
+				self.heat = 2
+			else:
+				self.heat = 0
 		elif movement_type == "jump":
 			# Distancia lineal del salto
 			if jump_distance is None:

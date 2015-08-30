@@ -398,6 +398,12 @@ class Game:
 		Calcula y genera la lista de comandos para la fase de "Ataques con Armas"
 		:return: (list) lista de (str) con los comandos
 		"""
+		player = self.player
+		enemy = self.enemies[0]
+		print("****** JUGADOR *******")
+		print(player)
+		print("****** ENEMIGO *******")
+		print(enemy)
 		player_position = self.player_position
 		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
 
