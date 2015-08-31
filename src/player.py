@@ -434,7 +434,7 @@ class Game:
 				if weapon.weapon_type != "Energía":
 					for ammo in player.ammo:
 						if ammo.ammo_weapon_code == weapon.code:
-							if ammo.working and ammo.ammo_quantity > 1:
+							if ammo.working and ammo.ammo_quantity >= 1:
 								break
 					else:
 						raise ValueError("No se ha encontrado munición para el arma {0}".format(weapon))
