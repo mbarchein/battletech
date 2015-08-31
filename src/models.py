@@ -658,9 +658,18 @@ class Mech:
 		:return: list[Component] listado de armas que se van a utlizar
 		"""
 
-		# cantidad de calor máxima que se puede generar en esta decisión
+		# ¿Impactos críticos en el motor?
+		slot = self.get_slot(Mech.LOCATION_CENTER_TORSO, "ACTUADOR", "Motores")
+		if slot.actuator.hits > 0:
+			engine_heat = 5
+		else:
+			engine_heat = 0
+
+		# ¿Radiadores dobles?
 		heat_sink_multiplier = 2 if self.heat_sink_type == 1 else 1
-		max_allowed_heat = max_heat - self.heat + self.num_heat_sinks_on * heat_sink_multiplier
+
+		# cantidad de calor máxima que se puede generar en esta decisión
+		max_allowed_heat = max_heat - ( self.heat + engine_heat ) + ( self.num_heat_sinks_on * heat_sink_multiplier )
 
 		# Ordenamos por probabilidad de impacto
 		sorted_by_roll = sorted(available_weapons, key= lambda tup: tup[0])
