@@ -410,7 +410,49 @@ class Game:
 		print("* FASE DE ATAQUE CON ARMAS")
 		print("* El jugador está en {0} y el enemigo está en {1}".format(player_position, enemy_position))
 
-		return self.no_weapon_attack()
+		available_weapon_attacks = player.get_available_weapon_attacks(enemy)
+
+		# optimizar ataque para no superar un determinado umbral de calor
+		weapons = player.optimize_weapon_attack(available_weapon_attacks, 9)
+		print("* Se van a disparar estas armas")
+		for weapon in weapons:
+			print(weapon)
+
+		if len(weapons) > 0:
+			# Ataque con armas
+			actions = [
+				"False",             # coger garrote
+				enemy.hextile.name,  # hexágono objetivo primario
+				str(len(weapons)),   # nº de armas que se van a disparar
+			]
+
+			for weapon in weapons:
+				actions.append(Mech.LOCATIONS[weapon.primary_location])  # ubicación del arma
+				actions.append(str(weapon.slot_number))     # nº de slot del arma
+				actions.append("False")                     # disparo a doble cadencia
+
+				if weapon.weapon_type != "Energía":
+					for ammo in player.ammo:
+						if ammo.ammo_weapon_code == weapon.code:
+							if ammo.working and ammo.ammo_quantity > 1:
+								break
+					else:
+						raise ValueError("No se ha encontrado munición para el arma {0}".format(weapon))
+
+					actions.append(Mech.LOCATIONS[ammo.primary_location])  # ubicación de la munición
+					actions.append(str(ammo.slot_number))    # nº de slot de la munición
+				else:
+					actions.append("-1")    # El arma no requiere munición (ubicación)
+					actions.append("-1")    # El arma no requiere munición (slot)
+
+				actions.append(enemy.hextile.name)      # objetivo del disparo
+				actions.append("Mech")                  # tipo de objetivo
+
+		else:
+			# No se hará ataque con armas
+			actions = self.no_weapon_attack()
+
+		return actions
 
 	def no_weapon_attack(self):
 		"""
@@ -420,7 +462,7 @@ class Game:
 
 		actions = [
 			"False",
-			"0000"
+			"0000",
 			"0"
 		]
 

@@ -44,6 +44,7 @@ class Mech:
 		self.disconnected = disconnected
 		self.swamped = swamped
 		self.ground = ground
+		self.standing = not self.ground # complementario de self.ground
 		self.hextile = hextile
 		self.heading = heading
 		self.torso_heading = torso_heading
@@ -119,7 +120,10 @@ class Mech:
 		self.last_movement = last_movement
 
 		# Preparar listas de armas y municiones
+		""" :type: list[Component] """
 		self.weapons = []
+
+		""" :type: list[Component] """
 		self.ammo = []
 
 		# Clasificar entre armamento y munición
@@ -128,6 +132,18 @@ class Mech:
 				self.weapons.append(component)
 			elif component.component_class == "MUNICION":
 				self.ammo.append(component)
+
+
+		# para cada componente, averiguar el slot en el que está insertado
+		for component in equipped_components:
+			for slot_number in range(len(self.slots[component.primary_location])):
+				slot = self.slots[component.primary_location][slot_number]
+				if component.code == slot.code:
+					component.slot = slot
+					component.slot_number = slot_number
+					break
+			else:
+				raise ValueError("No se ha encontrado el slot para el componente {0}".format(component))
 
 
 	def __str__(self):
@@ -354,6 +370,24 @@ class Mech:
 		else:
 			return None
 
+	def get_all_slots(self, location, slot_class, name):
+		"""
+		Devuelve un todos los slot qur coinciden con clase y nombre
+		:param location: ubicación en las partes del Mech
+		:param slot_class: (str) clase
+		:param name: (str) nombre
+		:return: Slot|None  slot si lo encuentra o None en caso contrario
+		:rtype: list[Slot]
+		"""
+
+		out = []
+
+		for slot in self.slots[location]:
+			if slot.slot_class == slot_class and name == slot.name:
+				out.append(slot)
+
+		return out
+
 	def calculate_phisical_attack_availability(self, enemy):
 		"""
 		Calcula los ataques físicos que se pueden realizar contra el enemigo indicado, teniendo en cuenta el estado
@@ -459,7 +493,7 @@ class Mech:
 				damage = ceil(self.weight / 5)
 
 			# Añadir modificadores de tirada comunes
-			roll += self.attack_modifiers(enemy, line_of_sight_and_cover)
+			roll += self.common_attack_modifiers(enemy, line_of_sight_and_cover)
 
 			# Añadir modificadores de tirada y ajuste de daño para ataques físicos
 			slot_actuator_1 = self.get_slot(location, "ACTUADOR", slot_names[1])
@@ -524,7 +558,184 @@ class Mech:
 
 		return  optimized_hits
 
-	def attack_modifiers(self, enemy, line_of_sight_and_cover, debug=False):
+	def get_available_weapon_attacks(self, enemy):
+		"""
+		Devuelve los posibles ataques que se puden lanzar a un determinado enemigo
+		:type enemy: Mech
+		:param enemy: Mech enemigo al que se quiere atacar
+		:return:
+		"""
+
+		""" :type: list[Component] """
+		available_weapons = []
+		gamemap = self.hextile.map
+
+		# Línea de visión y cobertura entre posición del jugador y enemigo
+		line_of_sight_and_cover = LineOfSightAndCover.calculate(gamemap, self.hextile, self.standing, enemy.hextile, enemy.standing)
+		print(line_of_sight_and_cover)
+
+		# Si no hay línea de visión, ningún arma puede ser utilizada
+		if not line_of_sight_and_cover.has_line_of_sight:
+			return available_weapons
+
+		# Construir lista de armas funcionales y con munición
+		working_weapons = []
+		for weapon in self.weapons:
+			# Si el arma está dañada, saltar
+			if weapon.damaged:
+				print("arma dañada:", weapon)
+				continue
+
+			# Si el arma es de energía, no necesita munición. Añadir a la lista
+			if weapon.weapon_type == "Energía":
+				working_weapons.append(weapon)
+				continue
+
+			# Determinar si hay munición operativa para el arma
+			for ammo in self.ammo:
+				if ammo.ammo_weapon_code == weapon.code:
+					if ammo.working and ammo.ammo_quantity > 1:
+						working_weapons.append(weapon)
+						break
+					else:
+						print("munición dañada o sin munición:", ammo)
+
+		print("armas funcionales y con munición:")
+		for weapon in working_weapons:
+			print(weapon)
+
+		# Distancia al enemigo
+		enemy_distance = networkx.astar_path_length(gamemap.hextile_adjacency_graph, self.hextile, enemy.hextile)
+		print("El enemigo está a una distancia de {0} hextiles".format(enemy_distance))
+
+		# Calcular el modificador para cada arma
+		for weapon in working_weapons:
+			impossible = False  ## True si no se puede disparar el arma por algún motivo
+			base_roll = 4  ## AVERIGUAR CUAL ES EL VALOR BASE PARA IMPACTAR DEL MECHWARRIOR
+			modified_roll = base_roll
+
+			# modificadores por ataque común y ataque con armas. Si un check devuelve None, significa que no se puede
+			# usar el arma en el ataque
+			mod1 = self.common_attack_modifiers(enemy, line_of_sight_and_cover)
+			if mod1 is None:
+				continue
+			else:
+				modified_roll += mod1
+
+			mod2 = self.weapon_attack_modifiers(enemy, line_of_sight_and_cover, weapon)
+			if mod2 is None:
+				continue
+			else:
+				modified_roll += mod2
+
+			# distancia mínima para disparo
+			if enemy_distance <= weapon.min_range:
+				modified_roll += weapon.min_range - enemy_distance + 1
+
+			# rangos de disparo
+			if 0 < enemy_distance <= weapon.short_range:
+				pass
+			elif weapon.short_range < enemy_distance <= weapon.medium_range:
+				modified_roll += 2
+			elif weapon.medium_range < enemy_distance <= weapon.long_range:
+				modified_roll += 4
+			else:
+				impossible = True
+
+			# Añadir arma si es posible impactar con ella al enemigo
+			if modified_roll <= 12 and not impossible:
+				available_weapons.append((modified_roll, weapon))
+
+			print("Arma mod:{0:<2} imp:{1}".format(modified_roll, impossible), weapon)
+
+		return available_weapons
+
+	def optimize_weapon_attack(self, available_weapons, max_heat):
+		"""
+		Calcula el mejor ataque con armas desde una lista de armas y un tope de calor
+		:param available_weapons: list[(modified_roll, Component)  lista de (modificador,armas) a tener en cuenta
+		:param max_heat: int  calor máximo que se puede generar
+		:return: list[Component] listado de armas que se van a utlizar
+		"""
+
+		# cantidad de calor máxima que se puede generar en esta decisión
+		heat_sink_multiplier = 2 if self.heat_sink_type == 1 else 1
+		max_allowed_heat = max_heat - self.heat + self.num_heat_sinks_on * heat_sink_multiplier
+
+		# Ordenamos por probabilidad de impacto
+		sorted_by_roll = sorted(available_weapons, key= lambda tup: tup[0])
+
+		# devolver todas las armas que pueden ser disparadas
+		out = []
+		for roll, weapon in sorted_by_roll:
+			max_allowed_heat -= weapon.heat
+			if max_allowed_heat >= 0:
+				out.append(weapon)
+			else:
+				break
+
+		return out
+
+
+
+	def weapon_attack_modifiers(self, enemy, line_of_sight_and_cover, weapon, debug=False):
+		"""
+		Calcula modificadores a la tirada de específicos para ataque con armas
+		:type weapon: Component
+		:param debug:
+		:param enemy: Mech enemigo
+		:param line_of_sight_and_cover: línea de visión y cobertura entre atacante y enemigo
+		:param weapon: Component componente de tipo ARMA
+		:return: int|None   modificador a la tirada o None si el jugador no puede atacar o el enemigo no puede ser impactado
+		"""
+		modifier = 0
+
+		# calor
+		if 0 <= self.heat <= 7:
+			pass
+		elif 8 <= self.heat <= 12:
+			modifier += 1
+		elif 13 <= self.heat <= 16:
+			modifier += 2
+		elif 17 <= self.heat <= 23:
+			modifier += 3
+		elif 24 <= self.heat:
+			modifier += 4
+
+		# Hexágonos intermedios de la línea de visión
+		for hextile in line_of_sight_and_cover.path:
+			if hextile.terrain_type == Hextile.OBJECT_TYPE_LIGHT_WOODS:
+				modifier += 1
+			elif hextile.terrain_type == Hextile.OBJECT_TYPE_HEAVY_WOODS:
+				modifier += 2
+
+		# daños generales en el atacante
+		sensor_slots = self.get_all_slots(self.LOCATION_HEAD, "ACTUADOR", "Sensores")
+		sensors_destroyed = 0
+		for slot in sensor_slots:
+			if slot.actuator.damaged:
+				sensors_destroyed +=1
+				if sensors_destroyed == 2:
+					return  None
+				else:
+					modifier += 2
+
+		# Daños en partes del Mech que afectan al arma
+		slot = self.get_slot(weapon.primary_location, "ACTUADOR", "Hombro")
+		if slot and slot.actuator.damaged:
+			modifier += 4
+		else:
+			slot = self.get_slot(weapon.primary_location, "ACTUADOR", "Brazo")
+			if slot and slot.actuator.damaged:
+				modifier += 1
+
+			slot = self.get_slot(weapon.primary_location, "ACTUADOR", "Antebrazo")
+			if slot and slot.actuator.damaged:
+				modifier += 1
+
+		return modifier
+
+	def common_attack_modifiers(self, enemy, line_of_sight_and_cover, debug=False):
 		"""
 		Calcula modificadores a la tirada de ataque comunes tanto para ataques físicos como para ataques con armas
 		:param enemy: Mech enemigo
@@ -670,7 +881,8 @@ class Component:
 
 	def __init__(self, code, name,  component_class, primary_location, secondary_location, working,
 			weapon_type, back_mounted, damage, heat, min_range, short_range, medium_range, long_range,
-			shooting_modifier, shoots_per_round, ammo_weapon_code, ammo_quantity, special_ammo
+			shooting_modifier, shoots_per_round, ammo_weapon_code, ammo_quantity, special_ammo,
+			slot = None, slot_number = None
 	):
 		self.ammo_weapon_code  = ammo_weapon_code
 		self.back_mounted  = back_mounted
@@ -691,6 +903,10 @@ class Component:
 		self.special_ammo  = special_ammo
 		self.weapon_type  = weapon_type
 		self.working = working
+		self.damaged = not working # ¿Dañado? (complementario de working)
+		self.slot = slot
+		self.slot_number = slot_number
+
 
 	def __str__(self):
 		out = "{0:<9} ".format(self.component_class)
