@@ -481,12 +481,18 @@ class Mech:
 		check_locations={}
 		# Brazos
 		if "punch" in allowed_attacks:
-			check_locations[self.LOCATION_LEFT_ARM] =  ("Hombro", "Brazo", "Antebrazo", "Mano")
-			check_locations[self.LOCATION_RIGHT_ARM] = ("Hombro", "Brazo", "Antebrazo", "Mano")
+
+			# Comprobar si el enemigo está en el ángulo correcto
+			if enemy.hextile in self.angles['front']['torso'] or enemy.hextile in self.angles['left']['torso']:
+				check_locations[self.LOCATION_LEFT_ARM] =  ("Hombro", "Brazo", "Antebrazo", "Mano")
+
+			if enemy.hextile in self.angles['front']['torso'] or enemy.hextile in self.angles['right']['torso']:
+				check_locations[self.LOCATION_RIGHT_ARM] = ("Hombro", "Brazo", "Antebrazo", "Mano")
 
 		if "kick" in allowed_attacks:
-			check_locations[self.LOCATION_LEFT_LEG] =  ("Cadera", "Muslo", "Pierna", "Pie")
-			check_locations[self.LOCATION_RIGHT_LEG] =  ("Cadera", "Muslo", "Pierna", "Pie")
+			if enemy.hextile in self.angles['front']['feet']:
+				check_locations[self.LOCATION_LEFT_LEG] =  ("Cadera", "Muslo", "Pierna", "Pie")
+				check_locations[self.LOCATION_RIGHT_LEG] =  ("Cadera", "Muslo", "Pierna", "Pie")
 
 		# Línea de visión y cobertura (utilizada para calcular modificadores)
 		line_of_sight_and_cover = LineOfSightAndCover.calculate(
@@ -885,9 +891,11 @@ class Mech:
 		else:
 			raise ValueError("Parte incorrecta: {0}".format(body_part))
 
-		front = 5
-		print(angle, body_part, self.hextile, front, self.hextile.cube_coords)
+		# Todos los cálculos se hacen de forma mucho más sencilla si se utilizan las coordenadas cúbicas de cada Hextile
+		# en vez de las coordenadas de desplazamiento en las que viene el mapa de forma nativa. El cálculo de la
+		# coordenada cúbica asociada a cada Hextile se hace en su constructor
 
+		# Condiciones para abarcar casillas frontales según rotación. También sirve para las traseras sumando 3 mod 6
 		conditions_front = (
 			lambda a,b: a[1] >= b[1] and a[2] <= b[2],
 			lambda a,b: a[2] <= b[2] and a[0] >= b[0],
@@ -897,13 +905,15 @@ class Mech:
 			lambda a,b: a[0] <= b[0] and a[1] >= b[1],
 		)
 
+		# Condiciones para abarcar casillas laterales por la derecha según rotación. También sirve para las laterales
+		# por la izquierda sumando 3 mod 6
 		conditions_right = (
-			lambda a,b: a[1] <= b[1] and a[0] >= b[0],
-			#lambda a,b: a[2] <= b[2] and a[0] >= b[0],
-			#lambda a,b: a[0] >= b[0] and a[1] <= b[1],
-			#lambda a,b: a[1] <= b[1] and a[2] >= b[2],
-			#lambda a,b: a[2] >= b[2] and a[0] <= b[0],
-			#lambda a,b: a[0] <= b[0] and a[1] >= b[1],
+			lambda a,b: a[0] >= b[0] and a[1] <= b[1] and a[2] <= b[2],
+			lambda a,b: a[0] >= b[0] and a[1] <= b[1] and a[2] >= b[2],
+			lambda a,b: a[0] <= b[0] and a[1] <= b[1] and a[2] >= b[2],
+			lambda a,b: a[0] <= b[0] and a[1] >= b[1] and a[2] >= b[2],
+			lambda a,b: a[0] <= b[0] and a[1] >= b[1] and a[2] <= b[2],
+			lambda a,b: a[0] >= b[0] and a[1] >= b[1] and a[2] <= b[2],
 		)
 
 		if angle == "front":
@@ -915,7 +925,6 @@ class Mech:
 
 		if angle == "back":
 			back_neighbor_heading = ((front + 2) % 6) + 1
-			print(back_neighbor_heading)
 			if back_neighbor_heading in self.hextile.neighbors:
 				condition = conditions_front[back_neighbor_heading-1]
 				source = self.hextile.neighbors[back_neighbor_heading]
@@ -923,108 +932,23 @@ class Mech:
 					if condition(hextile.cube_coords, source.cube_coords):
 						hextiles.append(hextile)
 
-		#if angle == "right":
-		#	right_neighbor_heading = ((front + 1) % 6) + 1
-		#	print(right_neighbor_heading)
-		#	if right_neighbor_heading in self.hextile.neighbors:
-		#		condition = conditions_right[right_neighbor_heading-1]
-		#		source = self.hextile.neighbors[right_neighbor_heading]
-		#		for name,hextile in self.map.hextile_by_name.items():
-		#			if condition(hextile.cube_coords, source.cube_coords):
-		#				hextiles.append(hextile)
+		if angle == "right":
+			right_neighbor_heading = ((front + 1) % 6) + 1
+			if right_neighbor_heading in self.hextile.neighbors:
+				condition = conditions_right[front-1]
+				source = self.hextile.neighbors[right_neighbor_heading]
+				for name,hextile in self.map.hextile_by_name.items():
+					if condition(hextile.cube_coords, source.cube_coords):
+						hextiles.append(hextile)
 
-
-		for h in sorted(hextiles, key=lambda h: h.name):
-			print(h, h.cube_coords)
-
-
-
-		# if angle == "front":
-		# 	# calcular rotaciones para hexágonos que quedan en la "posición frontal"
-		# 	right = (front % 6) + 1
-		# 	left = ((front + 4) % 6) + 1
-		#
-		# 	# recorrer en dirección right y para cada uno de ellos recorrer  en dirección "front" y meter en la lista
-		# 	current_right = self.hextile
-		# 	while current_right:
-		# 		print("current right", current_right)
-		# 		current_front = current_right
-		# 		while current_front:
-		# 			print("current front", current_front)
-		# 			hextiles.append(current_front)
-		# 			current_front = current_front.neighbors[front] if front in current_front.neighbors else None
-		# 		current_right = current_right.neighbors[right] if right in current_right.neighbors else None
-		#
-		# 	# ahora, repetir recorriendo hacia la izquierda
-		# 	current_left = self.hextile.neighbors[left] if left in self.hextile.neighbors else None
-		# 	while current_left:
-		# 		print("current left", current_left)
-		# 		current_front = current_left
-		# 		while current_front:
-		# 			print("current front", current_front)
-		# 			hextiles.append(current_front)
-		# 			current_front = current_front.neighbors[front] if front in current_front.neighbors else None
-		# 		current_left = current_left.neighbors[left] if left in current_left.neighbors else None
-		#
-		# if angle == "back":
-		# 	# calcular rotaciones para hexágonos que quedan en la "posición trasera"
-		# 	back = ((front + 2) % 6) +1
-		# 	right = (back % 6) + 1
-		# 	left = ((back + 4) % 6) + 1
-		#
-		# 	# recorrer en dirección right y para cada uno de ellos recorrer  en dirección "front" y meter en la lista
-		# 	current_right = self.hextile.neighbors[back] if back in self.hextile.neighbors else None
-		# 	while current_right:
-		# 		print("current right", current_right)
-		# 		current_back = current_right
-		# 		while current_back:
-		# 			print("current back", current_back)
-		# 			hextiles.append(current_back)
-		# 			current_back = current_back.neighbors[back] if back in current_back.neighbors else None
-		# 		current_right = current_right.neighbors[right] if right in current_right.neighbors else None
-		#
-		# 	# ahora, repetir recorriendo hacia la izquierda
-		# 	current_back = self.hextile.neighbors[back] if back in self.hextile.neighbors else None
-		# 	current_left = current_back.neighbors[left] if current_back and left in current_back.neighbors else None
-		# 	while current_left:
-		# 		print("current left", current_left)
-		# 		current_back = current_left
-		# 		while current_back:
-		# 			print("current back", current_back)
-		# 			hextiles.append(current_back)
-		# 			current_back = current_back.neighbors[back] if back in current_back.neighbors else None
-		# 		current_left = current_left.neighbors[left] if left in current_left.neighbors else None
-		#
-		# if angle == "right":
-		# 	# calcular rotaciones para hexágonos que quedan en la "posición derecha"
-		# 	right60 = (front % 6) + 1
-		# 	right120 = ((front + 1) % 6) + 1
-		#
-		# 	current_right120 = self.hextile.neighbors[right120] if right120 in self.hextile.neighbors else None
-		# 	while current_right120:
-		# 		print("current right120", current_right120)
-		# 		current_right60 = current_right120
-		# 		while current_right60:
-		# 			print("current right60", current_right60)
-		# 			hextiles.append(current_right60)
-		# 			current_right60 = current_right60.neighbors[right60] if right60 in current_right60.neighbors else None
-		# 		current_right120 = current_right120.neighbors[right120] if right120 in current_right120.neighbors else None
-		#
-		# if angle == "left":
-		# 	# calcular rotaciones para hexágonos que quedan en la "posición izquierda"
-		# 	left60 = ((front + 4) % 6) + 1
-		# 	left120 = ((front + 3) % 6) + 1
-		#
-		# 	current_left120 = self.hextile.neighbors[left120] if left120 in self.hextile.neighbors else None
-		# 	while current_left120:
-		# 		print("current left120", current_left120)
-		# 		current_left60 = current_left120
-		# 		while current_left60:
-		# 			print("current left60", current_left60)
-		# 			hextiles.append(current_left60)
-		# 			current_left60 = current_left60.neighbors[left60] if left60 in current_left60.neighbors else None
-		# 		current_left120 = current_left120.neighbors[left120] if left120 in current_left120.neighbors else None
-
+		if angle == "left":
+			left_neighbor_heading = ((front + 3) % 6) + 1
+			if left_neighbor_heading in self.hextile.neighbors:
+				condition = conditions_right[(front+2)%6]
+				source = self.hextile.neighbors[left_neighbor_heading]
+				for name,hextile in self.map.hextile_by_name.items():
+					if condition(hextile.cube_coords, source.cube_coords):
+						hextiles.append(hextile)
 
 		return hextiles
 
