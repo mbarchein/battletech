@@ -626,13 +626,45 @@ class Mech:
 		if not line_of_sight_and_cover.has_line_of_sight:
 			return available_weapons
 
-		# Construir lista de armas funcionales y con munición
+		# Construir lista de armas funcionales, con munición y con ángulo de disparo hacia el enemigo
 		working_weapons = []
 		for weapon in self.weapons:
 			# Si el arma está dañada, saltar
 			if weapon.damaged:
 				print("arma dañada:", weapon)
 				continue
+
+			# Comprobar si está en el ángulo de disparo correcto
+
+			# brazo izquierdo
+			if weapon.primary_location == self.LOCATION_LEFT_ARM:
+				if not ( enemy.hextile in self.angles['front']['torso'] or enemy.hextile in self.angles['left']['torso'] ) :
+					print("enemigo fuera de ángulo izquierdo/frontal (torso):", weapon)
+					continue
+
+			# brazo derecho
+			if weapon.primary_location == self.LOCATION_RIGHT_ARM:
+				if not ( enemy.hextile in self.angles['front']['torso'] or enemy.hextile in self.angles['right']['torso'] ) :
+					print("enemigo fuera de ángulo derecho/frontal (torso):", weapon)
+					continue
+
+			# torso espalda
+			if weapon.primary_location in (self.LOCATION_LEFT_BACK_TORSO, self.LOCATION_RIGHT_BACK_TORSO, self.LOCATION_CENTER_BACK_TORSO):
+				if not ( enemy.hextile in self.angles['back']['torso'] ) :
+					print("enemigo fuera de ángulo trasero (torso):", weapon)
+					continue
+
+			# torso frontal
+			if weapon.primary_location in (self.LOCATION_LEFT_TORSO, self.LOCATION_RIGHT_TORSO, self.LOCATION_CENTER_TORSO):
+				if not ( enemy.hextile in self.angles['front']['torso'] ) :
+					print("enemigo fuera de ángulo frontal (torso):", weapon)
+					continue
+
+			# piernas
+			if weapon.primary_location in (self.LOCATION_LEFT_LEG, self.LOCATION_RIGHT_LEG):
+				if not ( enemy.hextile in self.angles['front']['feet'] ) :
+					print("enemigo fuera de ángulo frontal (piernas):", weapon)
+					continue
 
 			# Si el arma es de energía, no necesita munición. Añadir a la lista
 			if weapon.weapon_type == "Energía":
