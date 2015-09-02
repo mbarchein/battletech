@@ -18,15 +18,11 @@ class Game:
 		#print(self.map)
 
 		# Parsear fichero con información de mechs
-		self.mechs = Mech.parsefile(player_id)
+		self.mechs = Mech.parsefile(player_id, self.map)
 
 		# Mechs jugador y enemigos
 		self.player  = self.mechs[player_id]
 		self.enemies = [mech for mech in self.mechs if mech.id!=player_id]
-
-		# actualizar hextiles de los mechs con referencias a los objetos Hextile
-		for mech in self.mechs:
-			mech.hextile = self.map.hextile_by_name[mech.hextile]
 
 		# Posiciones
 		self.player_position = MechPosition(self.player.heading, self.player.hextile)

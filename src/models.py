@@ -23,7 +23,7 @@ class Mech:
 
 	LOCATIONS = ["BI", "TI", "PI", "PD", "TD", "BD", "TC", "CAB", "TIa", "TDa", "TCa"]
 
-	def __init__(self,
+	def __init__(self, gamemap,
 			mech_id, active, disconnected, swamped, ground, hextile, heading, torso_heading, heat, on_fire,
 			has_club, club_type, shield, hull, narc, inarc, name, model, weight, power, num_internal_heat_sinks,
 			num_heat_sinks, has_masc, dacmtd, dacmti, dacmtc, max_heat_generated, has_arms, has_left_shoulder,
@@ -38,6 +38,9 @@ class Mech:
 			ejection_ready_ammo=None, last_movement=None
 	):
 
+		# Mapa en el que está ubicado el Mech
+		self.map = gamemap
+
 		# Datos de mechsJ#.sbt
 		self.id = mech_id
 		self.active = active
@@ -45,7 +48,7 @@ class Mech:
 		self.swamped = swamped
 		self.ground = ground
 		self.standing = not self.ground # complementario de self.ground
-		self.hextile = hextile
+		self.hextile = gamemap.hextile_by_name[hextile]
 		self.heading = heading
 		self.torso_heading = torso_heading
 		self.heat = heat
@@ -145,13 +148,52 @@ class Mech:
 			else:
 				raise ValueError("No se ha encontrado el slot para el componente {0}".format(component))
 
+		# Calcular ángulos
+		self.angles = {
+			'front': {
+				'torso': self.calculate_angles("front", "torso"),
+				'feet': self.calculate_angles("front", "feet")
+			},
+			'back': {
+				'torso': self.calculate_angles("back", "torso"),
+				'feet': self.calculate_angles("back", "feet")
+			},
+			'right': {
+				'torso': self.calculate_angles("right", "torso"),
+				'feet': self.calculate_angles("right", "feet")
+			},
+			'left': {
+				'torso': self.calculate_angles("left", "torso"),
+				'feet': self.calculate_angles("left", "feet")
+			}
+		}
 
 	def __str__(self):
 		out = pprint.pformat(vars(self), indent=2)
 		return out
 
+	def update_angles(self):
+		self.angles = {
+			'front': {
+				'torso': self.calculate_angles("front", "torso"),
+				'feet': self.calculate_angles("front", "feet")
+			},
+			'back': {
+				'torso': self.calculate_angles("back", "torso"),
+				'feet': self.calculate_angles("back", "feet")
+			},
+			'right': {
+				'torso': self.calculate_angles("right", "torso"),
+				'feet': self.calculate_angles("right", "feet")
+			},
+			'left': {
+				'torso': self.calculate_angles("left", "torso"),
+				'feet': self.calculate_angles("left", "feet")
+			}
+		}
+
 	@staticmethod
-	def parsefile(player_id):
+	def parsefile(player_id, gamemap):
 		"""
 		Parsea los ficheros con la información de los Mechs
 		:rtype : list[Mech]
@@ -337,7 +379,7 @@ class Mech:
 			f2.close()
 
 			# Añadir mech al listado
-			mech = Mech(mech_id=mech_id, **mechdata)
+			mech = Mech(mech_id=mech_id, gamemap=gamemap, **mechdata)
 			mechs.append(mech)
 
 		# Fin de fichero mechsJ#.sbt
@@ -826,6 +868,165 @@ class Mech:
 		if debug: print("modifier7 {0}".format(modifier))
 
 		return modifier
+
+	def calculate_angles(self, angle, body_part):
+		"""
+		Calcula los ángulos según la posición actual del mech
+		:param angle: str  "front", "back", "left", "right"
+		:param body_part: str  "torso", "feet"
+		"""
+
+		hextiles = []
+
+		if body_part == "torso":
+			front = self.torso_heading
+		elif body_part == "feet":
+			front = self.heading
+		else:
+			raise ValueError("Parte incorrecta: {0}".format(body_part))
+
+		front = 5
+		print(angle, body_part, self.hextile, front, self.hextile.cube_coords)
+
+		conditions_front = (
+			lambda a,b: a[1] >= b[1] and a[2] <= b[2],
+			lambda a,b: a[2] <= b[2] and a[0] >= b[0],
+			lambda a,b: a[0] >= b[0] and a[1] <= b[1],
+			lambda a,b: a[1] <= b[1] and a[2] >= b[2],
+			lambda a,b: a[2] >= b[2] and a[0] <= b[0],
+			lambda a,b: a[0] <= b[0] and a[1] >= b[1],
+		)
+
+		conditions_right = (
+			lambda a,b: a[1] <= b[1] and a[0] >= b[0],
+			#lambda a,b: a[2] <= b[2] and a[0] >= b[0],
+			#lambda a,b: a[0] >= b[0] and a[1] <= b[1],
+			#lambda a,b: a[1] <= b[1] and a[2] >= b[2],
+			#lambda a,b: a[2] >= b[2] and a[0] <= b[0],
+			#lambda a,b: a[0] <= b[0] and a[1] >= b[1],
+		)
+
+		if angle == "front":
+			condition = conditions_front[front-1]
+			source = self.hextile
+			for name,hextile in self.map.hextile_by_name.items():
+				if condition(hextile.cube_coords, source.cube_coords):
+					hextiles.append(hextile)
+
+		if angle == "back":
+			back_neighbor_heading = ((front + 2) % 6) + 1
+			print(back_neighbor_heading)
+			if back_neighbor_heading in self.hextile.neighbors:
+				condition = conditions_front[back_neighbor_heading-1]
+				source = self.hextile.neighbors[back_neighbor_heading]
+				for name,hextile in self.map.hextile_by_name.items():
+					if condition(hextile.cube_coords, source.cube_coords):
+						hextiles.append(hextile)
+
+		#if angle == "right":
+		#	right_neighbor_heading = ((front + 1) % 6) + 1
+		#	print(right_neighbor_heading)
+		#	if right_neighbor_heading in self.hextile.neighbors:
+		#		condition = conditions_right[right_neighbor_heading-1]
+		#		source = self.hextile.neighbors[right_neighbor_heading]
+		#		for name,hextile in self.map.hextile_by_name.items():
+		#			if condition(hextile.cube_coords, source.cube_coords):
+		#				hextiles.append(hextile)
+
+
+		for h in sorted(hextiles, key=lambda h: h.name):
+			print(h, h.cube_coords)
+
+
+
+		# if angle == "front":
+		# 	# calcular rotaciones para hexágonos que quedan en la "posición frontal"
+		# 	right = (front % 6) + 1
+		# 	left = ((front + 4) % 6) + 1
+		#
+		# 	# recorrer en dirección right y para cada uno de ellos recorrer  en dirección "front" y meter en la lista
+		# 	current_right = self.hextile
+		# 	while current_right:
+		# 		print("current right", current_right)
+		# 		current_front = current_right
+		# 		while current_front:
+		# 			print("current front", current_front)
+		# 			hextiles.append(current_front)
+		# 			current_front = current_front.neighbors[front] if front in current_front.neighbors else None
+		# 		current_right = current_right.neighbors[right] if right in current_right.neighbors else None
+		#
+		# 	# ahora, repetir recorriendo hacia la izquierda
+		# 	current_left = self.hextile.neighbors[left] if left in self.hextile.neighbors else None
+		# 	while current_left:
+		# 		print("current left", current_left)
+		# 		current_front = current_left
+		# 		while current_front:
+		# 			print("current front", current_front)
+		# 			hextiles.append(current_front)
+		# 			current_front = current_front.neighbors[front] if front in current_front.neighbors else None
+		# 		current_left = current_left.neighbors[left] if left in current_left.neighbors else None
+		#
+		# if angle == "back":
+		# 	# calcular rotaciones para hexágonos que quedan en la "posición trasera"
+		# 	back = ((front + 2) % 6) +1
+		# 	right = (back % 6) + 1
+		# 	left = ((back + 4) % 6) + 1
+		#
+		# 	# recorrer en dirección right y para cada uno de ellos recorrer  en dirección "front" y meter en la lista
+		# 	current_right = self.hextile.neighbors[back] if back in self.hextile.neighbors else None
+		# 	while current_right:
+		# 		print("current right", current_right)
+		# 		current_back = current_right
+		# 		while current_back:
+		# 			print("current back", current_back)
+		# 			hextiles.append(current_back)
+		# 			current_back = current_back.neighbors[back] if back in current_back.neighbors else None
+		# 		current_right = current_right.neighbors[right] if right in current_right.neighbors else None
+		#
+		# 	# ahora, repetir recorriendo hacia la izquierda
+		# 	current_back = self.hextile.neighbors[back] if back in self.hextile.neighbors else None
+		# 	current_left = current_back.neighbors[left] if current_back and left in current_back.neighbors else None
+		# 	while current_left:
+		# 		print("current left", current_left)
+		# 		current_back = current_left
+		# 		while current_back:
+		# 			print("current back", current_back)
+		# 			hextiles.append(current_back)
+		# 			current_back = current_back.neighbors[back] if back in current_back.neighbors else None
+		# 		current_left = current_left.neighbors[left] if left in current_left.neighbors else None
+		#
+		# if angle == "right":
+		# 	# calcular rotaciones para hexágonos que quedan en la "posición derecha"
+		# 	right60 = (front % 6) + 1
+		# 	right120 = ((front + 1) % 6) + 1
+		#
+		# 	current_right120 = self.hextile.neighbors[right120] if right120 in self.hextile.neighbors else None
+		# 	while current_right120:
+		# 		print("current right120", current_right120)
+		# 		current_right60 = current_right120
+		# 		while current_right60:
+		# 			print("current right60", current_right60)
+		# 			hextiles.append(current_right60)
+		# 			current_right60 = current_right60.neighbors[right60] if right60 in current_right60.neighbors else None
+		# 		current_right120 = current_right120.neighbors[right120] if right120 in current_right120.neighbors else None
+		#
+		# if angle == "left":
+		# 	# calcular rotaciones para hexágonos que quedan en la "posición izquierda"
+		# 	left60 = ((front + 4) % 6) + 1
+		# 	left120 = ((front + 3) % 6) + 1
+		#
+		# 	current_left120 = self.hextile.neighbors[left120] if left120 in self.hextile.neighbors else None
+		# 	while current_left120:
+		# 		print("current left120", current_left120)
+		# 		current_left60 = current_left120
+		# 		while current_left60:
+		# 			print("current left60", current_left60)
+		# 			hextiles.append(current_left60)
+		# 			current_left60 = current_left60.neighbors[left60] if left60 in current_left60.neighbors else None
+		# 		current_left120 = current_left120.neighbors[left120] if left120 in current_left120.neighbors else None
+
+
+		return hextiles
 
 
 class Actuator:
@@ -1554,6 +1755,17 @@ class Hextile:
 		# Vecinos de este Hextile. Será un diccionario con las posibles claves 1..6 y otro hextile como valor, sólo si
 		# el vecino existe en esa dirección. Si no existe, la clave no estará definida en el diccionario.
 		self.neighbors = neigbors
+
+		# Coordenadas cúbicas (x, y, z) (http://www.redblobgames.com/grids/hexagons/#conversions)
+		c = col-1
+		r = row-1
+
+		# odd-q
+		x = c
+		z = int(r - (c - (c&1)) / 2)
+		y = -x-z
+
+		self.cube_coords = (x, y, z)
 
 		# Mapa que contiene este Hextile
 		self.map = gamemap
