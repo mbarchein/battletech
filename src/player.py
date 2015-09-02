@@ -101,7 +101,9 @@ class Game:
 				path = self.move_to_enemy_phisical_attack_range()
 
 			# Generar y devolver acciones
-			if path.movement_type == "walk":
+			if not path:
+				action = self.immobile()
+			elif path.movement_type == "walk":
 				if path.length == 0:
 					action = self.immobile()
 				else:
@@ -109,7 +111,7 @@ class Game:
 			elif path.movement_type =="jump":
 				action = self.jump(path)
 			else:
-				raise NotImplemented()
+				action = self.immobile()
 
 		return action
 
@@ -141,34 +143,7 @@ class Game:
 			########################################################
 			## Saltar
 			########################################################
-			# Posiciones alcanzables saltando
-			jump_available_positions = self.map.hextiles_in_max_radius(player_position.hextile, self.movement_points['jump'])
-			print("* Hay {0} posiciones posibles para salto".format(len(jump_available_positions)), jump_available_positions)
-
-			# Ordenar por la que queda a una distancia más corta del enemigo. Son caminos que van desde la posición enemiga
-			# a cada una de los posibles destinos de salto del jugador. Se calculan para cada una de las posiciones interesantes
-			# de ataque al enemigo
-			reverse_jump_paths = []
-			for candidate_position in candidate_positions:
-				reverse_jump_paths += self.map.jump_paths_to_set(candidate_position.hextile, jump_available_positions)
-
-			# Aquí tenemos todos los caminos inversos de salto con origen en las posiciones de ataque y destino en la nube
-			# de saltos posibles, ordenados por cercanía al objetivo
-			reverse_jump_paths.sort()
-
-			# Encontrar el primer camino más cercano que permite salto
-			for reverse_path in reverse_jump_paths:
-				# Crear camino desde origen a destino de salto
-				temp_jump_path = MovementPath(self.map, [player_position.hextile, reverse_path.target], "jump")
-				if temp_jump_path.is_jump_possible(self.movement_points['jump']):
-					# Calcular posición de caída para encarar al enemigo
-					temp_jump_target_position = MechPosition(1, temp_jump_path.target)
-					jump_target_position_rotated = temp_jump_target_position.get_position_facing_to(enemy_position)
-					jump_path = MovementPath(self.map, [player_position, jump_target_position_rotated], "jump", temp_jump_path.cost)
-					print("* Mejor salto para acercarse al enemigo:", jump_path)
-					break
-			else:
-				jump_path = None
+			jump_path = self.move_to_enemy_jump(candidate_positions)
 
 			########################################################
 			## Andar
@@ -202,6 +177,49 @@ class Game:
 
 		return path
 
+	def move_to_enemy_jump(self, candidate_positions):
+		"""
+		Calcula un salto a una posición de las candidatas pasadas como argumento
+		:param candidate_positions:
+		:return:
+		"""
+		enemy_mech = self.enemies[0]
+		enemy_position  = MechPosition(enemy_mech.heading, enemy_mech.hextile)
+
+		########################################################
+		## Saltar
+		########################################################
+		# Posiciones alcanzables saltando
+		jump_available_positions = self.map.hextiles_in_max_radius(self.player_position.hextile, self.movement_points['jump'])
+		print("* Hay {0} posiciones posibles para salto".format(len(jump_available_positions)), jump_available_positions)
+
+		# Ordenar por la que queda a una distancia más corta del enemigo. Son caminos que van desde la posición enemiga
+		# a cada una de los posibles destinos de salto del jugador. Se calculan para cada una de las posiciones interesantes
+		# de ataque al enemigo
+		reverse_jump_paths = []
+		for candidate_position in candidate_positions:
+			reverse_jump_paths += self.map.jump_paths_to_set(candidate_position.hextile, jump_available_positions)
+
+		# Aquí tenemos todos los caminos inversos de salto con origen en las posiciones de ataque y destino en la nube
+		# de saltos posibles, ordenados por cercanía al objetivo
+		reverse_jump_paths.sort()
+
+		# Encontrar el primer camino más cercano que permite salto
+		for reverse_path in reverse_jump_paths:
+			# Crear camino desde origen a destino de salto
+			temp_jump_path = MovementPath(self.map, [self.player_position.hextile, reverse_path.target], "jump")
+			if temp_jump_path.is_jump_possible(self.movement_points['jump']):
+				# Calcular posición de caída para encarar al enemigo
+				temp_jump_target_position = MechPosition(1, temp_jump_path.target)
+				jump_target_position_rotated = temp_jump_target_position.get_position_facing_to(enemy_position)
+				jump_path = MovementPath(self.map, [self.player_position, jump_target_position_rotated], "jump", temp_jump_path.cost)
+				print("* Mejor salto para acercarse al enemigo:", jump_path)
+				break
+		else:
+			jump_path = None
+
+		return jump_path
+
 	def move_to_enemy_keep_weapon_range_distance(self):
 		"""
 		Devuelve el movimiento óptimo para acercarse al enemigo y quedarse a distancia con línea de visión si es posible
@@ -213,11 +231,9 @@ class Game:
 		enemy_position  = MechPosition(self.enemies[0].heading, self.enemies[0].hextile)
 
 		# Determinar cuales son las posiciones máximas a las que puede llegar el mech enemigo en su fase de movimiento
-		# Como no podemos saber los puntos de moniviento que tiene el mech enemigo, asumiremos un valor fijo para estimar
-		# su radio de movimiento
 		estimated_enemy_movement_points = enemy_mech.movement_points_walk
 		estimated_enemy_farthest_movement_positions = self.map.farthest_movements_possible(enemy_position, estimated_enemy_movement_points, "walk")
-		print("* El enemigo podría desplazarse a cualquiera de estas {0} posiciones con {1} puntos de movimiento:".format(len(estimated_enemy_farthest_movement_positions), estimated_enemy_movement_points), estimated_enemy_farthest_movement_positions)
+		print("* El enemigo podría desplazarse a cualquiera de estas {0} posiciones con {1} puntos de movimiento mediante 'Andar':".format(len(estimated_enemy_farthest_movement_positions), estimated_enemy_movement_points), estimated_enemy_farthest_movement_positions)
 
 		# Modificar cada una de las posiciones de la nube para que todas "encaren" a la posición actual del enemigo, ya
 		# que estas posiciones se utilizarán como posibles puntos de destino para el movimiento de nuestro jugador
@@ -259,11 +275,16 @@ class Game:
 		else:
 			# Recorrer camino más corto para acercarnos al enemigo, sin línea de visión
 			candidate_path = self.map.best_movement_path(player_position, enemy_position, "walk")
-			path = candidate_path.longest_movement(self.movement_points['walk'])
-			print ("* No hay ningún camino con línea de visión a la nube de posibles posiciones del enemigo, se selecciona el más cercano a la posición enemiga")
-			print(candidate_path)
-			print ("* Acciones del jugador para recorrer el camino:")
-			print(path)
+
+			if candidate_path:
+				path = candidate_path.longest_movement(self.movement_points['walk'])
+				print ("* No hay ningún camino con línea de visión a la nube de posibles posiciones del enemigo, se selecciona el más cercano a la posición enemiga")
+				print(candidate_path)
+				print ("* Acciones del jugador para recorrer el camino:")
+				print(path)
+			else:
+				# Intentar saltando
+				path = self.move_to_enemy_jump(estimated_enemy_farthest_movement_positions_heading_to_enemy)
 
 		return path
 
