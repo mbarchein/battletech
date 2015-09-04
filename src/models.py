@@ -139,14 +139,15 @@ class Mech:
 
 		# para cada componente, averiguar el slot en el que está insertado
 		for component in equipped_components:
-			for slot_number in range(len(self.slots[component.primary_location])):
-				slot = self.slots[component.primary_location][slot_number]
-				if component.code == slot.code:
-					component.slot = slot
-					component.slot_number = slot_number
-					break
-			else:
-				raise ValueError("No se ha encontrado el slot para el componente {0}".format(component))
+			if component.component_class != "NADA":
+				for slot_number in range(len(self.slots[component.primary_location])):
+					slot = self.slots[component.primary_location][slot_number]
+					if component.code == slot.code:
+						component.slot = slot
+						component.slot_number = slot_number
+						break
+				else:
+					raise ValueError("No se ha encontrado el slot para el componente {0}".format(component))
 
 		# Calcular ángulos
 		self.angles = {
