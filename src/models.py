@@ -3,6 +3,7 @@ import networkx
 import os
 import sys
 import subprocess
+from random import randint
 from util import readstr, readint, readbool, memoize
 import pprint
 
@@ -1287,6 +1288,28 @@ class GameMap:
 		return G
 		#for edge in G.edges(): print("({0},{1})".format(*edge))
 
+	@staticmethod
+	def manhattan_distance(a,b):
+		"""
+		Heurística para la búsqueda en grafos. Devuelve la distancia de Manhattan entre dos nodos del grafo
+		:param a: MechPosition | Hextile   nodo A
+		:param b: MechPosition | Hextile   nodo B
+		:return: int estimación de la distancia de Manhattan entre dos nodos
+		"""
+		if type(a) == MechPosition: a = a.hextile
+		if type(b) == MechPosition: b = b.hextile
+
+		if type(a) != Hextile or type(b) != Hextile:
+			return 0
+
+		A = a.cube_coords
+		B = b.cube_coords
+
+		# distancia de manhattan
+		distance = max(abs(A[0] - B[0]), abs(A[1] - B[1]), abs(A[2] - B[2]))
+		#print("heuristic", a,b,distance)
+		return distance
+
 	def _add_rotation_movements(self, G):
 		"""
 		Computa los movimientos de rotación (Izquierda, Derecha) de cada Hextile para el mapa actual. Estos movimientos
@@ -1331,7 +1354,7 @@ class GameMap:
 		action = "Andar" if movement_type=="walk" else "Correr"
 
 		try:
-			astar_path = networkx.astar_path(self.movement_graph[movement_type], source, target)
+			astar_path = networkx.astar_path(self.movement_graph[movement_type], source, target, heuristic=GameMap.manhattan_distance)
 			path = MovementPath(self, astar_path, movement_type)
 			if debug:
 				print ("Camino {0} --> {1} mediante \"{2}\"".format(source, target, action))
@@ -1410,7 +1433,7 @@ class GameMap:
 		paths = []
 		for target in targets:
 			try:
-				distance = networkx.astar_path_length(self.hextile_adjacency_graph, source, target)
+				distance = networkx.astar_path_length(self.hextile_adjacency_graph, source, target, heuristic=GameMap.manhattan_distance)
 				paths.append(MovementPath(self, [source, target], "jump", jump_distance=distance))
 			except networkx.NetworkXNoPath:
 				pass
@@ -1864,7 +1887,7 @@ class MechPosition:
 		# movimiento) y se comprueba en qué encaramiento aparece la segunda componente del camino generado (la que
 		# sucede al Hextile "source". Este encaramiento es el que necesitamos
 		G = source.map.hextile_adjacency_graph
-		path = networkx.astar_path(G, source, target)
+		path = networkx.astar_path(G, source, target, heuristic=GameMap.manhattan_distance)
 
 		if debug: print(path)
 
@@ -1973,7 +1996,7 @@ class MovementPath:
 		elif movement_type == "jump":
 			# Distancia lineal del salto
 			if jump_distance is None:
-				jump_distance = networkx.astar_path_length(self.map.hextile_adjacency_graph, self.source, self.target)
+				jump_distance = networkx.astar_path_length(self.map.hextile_adjacency_graph, self.source, self.target, heuristic=GameMap.manhattan_distance)
 
 			# El calor generado equivale a la distancia lineal del salto, con un mínimo de 3 unidades de calor generadas
 			self.heat = max(3, jump_distance)
